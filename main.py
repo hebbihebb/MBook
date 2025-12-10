@@ -33,11 +33,17 @@ except ImportError as e:
     print(f"Warning: Missing dependencies: {e}")
 
 # Check for optional batch processing support
-try:
-    from fast_maya_engine import is_lmdeploy_available
-    BATCH_MODE_AVAILABLE = is_lmdeploy_available()
-except ImportError:
-    BATCH_MODE_AVAILABLE = False
+# NOTE: Batch mode is DISABLED as of 2024-12-10
+# Reason: lmdeploy 0.11.0 CUDA kernels don't support Blackwell GPUs (RTX 50 series, sm_120)
+# Error: "no kernel image is available for execution on the device"
+# Re-enable when lmdeploy releases updated pre-built wheels with Blackwell support.
+# To re-enable: set BATCH_MODE_AVAILABLE = is_lmdeploy_available() below
+BATCH_MODE_AVAILABLE = False  # Disabled - see note above
+# try:
+#     from fast_maya_engine import is_lmdeploy_available
+#     BATCH_MODE_AVAILABLE = is_lmdeploy_available()
+# except ImportError:
+#     BATCH_MODE_AVAILABLE = False
 
 
 class VoicePromptDialog(tk.Toplevel):
