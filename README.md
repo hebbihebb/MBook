@@ -2,15 +2,18 @@
 
 Convert EPUB files to high-quality M4B audiobooks using Maya1's native text-to-speech with SNAC neural codec.
 
+![MBook GUI](docs/images/gui_screenshot.png)
+
 ## Features
 
 - **Native Maya1 TTS** - Uses the 3B-parameter Maya1 model for natural speech synthesis
 - **SNAC Neural Codec** - 24kHz audio output with excellent quality
 - **Voice Customization** - Natural language voice descriptions (age, accent, tone, pacing)
-- **EPUB Support** - Parses EPUB files and extracts text automatically
-- **M4B Export** - Creates audiobook files with metadata (title, author)
-- **Progress Logging** - Persistent log files for long-running conversions
-- **Graceful Interruption** - Can resume from saved chunks if interrupted
+- **EPUB Support** - Parses EPUB files and extracts chapters automatically
+- **M4B Export** - Creates audiobook files with chapter markers and metadata
+- **GUI Application** - Modern dark-themed interface with chapter selection
+- **Progress Tracking** - Resume interrupted conversions from saved chunks
+- **Audiobookshelf Ready** - Outputs organized for Audiobookshelf library management
 
 ## Requirements
 
@@ -22,7 +25,7 @@ Convert EPUB files to high-quality M4B audiobooks using Maya1's native text-to-s
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/MBook.git
+git clone https://github.com/hebbihebb/MBook.git
 cd MBook
 
 # Create virtual environment
@@ -35,12 +38,25 @@ pip install -r requirements.txt
 
 # Download spacy model
 python -m spacy download en_core_web_sm
-
-# Download Maya1 model (first run will download ~6.6GB)
-python -c "from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('maya-research/maya1')"
 ```
 
+The Maya1 model (~6.6GB) will be downloaded automatically on first run.
+
 ## Usage
+
+### GUI Application (Recommended)
+
+```bash
+python main.py
+```
+
+The GUI provides:
+- EPUB file and output folder selection
+- Chapter list with select all/none
+- Book cover preview
+- Voice prompt customization
+- Real-time progress with elapsed/remaining time
+- Pause, resume, and cancel controls
 
 ### Command Line
 
@@ -57,12 +73,6 @@ python convert_epub_to_audiobook.py "Book Title.epub" \
 
 # Custom output directory
 python convert_epub_to_audiobook.py "Book Title.epub" -o /path/to/output
-```
-
-### GUI Application
-
-```bash
-python main.py
 ```
 
 ## Voice Descriptions
@@ -82,45 +92,48 @@ Dark villain character. Male voice in their 40s with a British accent. Low pitch
 
 ### Supported Voice Attributes
 
-- **Age**: 20s, 30s, 40s
-- **Gender**: Male, Female
-- **Accent**: American, British, Australian, etc.
-- **Timbre**: Warm, gravelly, robotic, ethereal
-- **Pacing**: very_slow, slow, conversational, brisk, fast, very_fast
-- **Emotion**: neutral, energetic, excited, sad, sarcastic, dry
+| Attribute | Options |
+|-----------|---------|
+| Age | 20s, 30s, 40s, 50s+ |
+| Gender | Male, Female |
+| Accent | American, British, Australian, etc. |
+| Timbre | Warm, gravelly, robotic, ethereal |
+| Pacing | very_slow, slow, conversational, brisk, fast |
+| Emotion | neutral, energetic, excited, sad, sarcastic |
 
 ## Project Structure
 
 ```
 MBook/
-├── convert_epub_to_audiobook.py  # Main converter script
-├── pipeline.py                   # Maya1 pipeline wrapper
-├── assembler.py                  # Audio stitching utilities
 ├── main.py                       # GUI application
+├── convert_epub_to_audiobook.py  # Main converter with Maya1 TTS engine
+├── assembler.py                  # Audio stitching and M4B export
+├── fast_maya_engine.py           # Batch processing engine (experimental)
+├── pipeline.py                   # Legacy Maya1 pipeline wrapper
 ├── requirements.txt              # Python dependencies
-├── models/                       # Downloaded Maya1 model files
-└── audiobook_output/             # Generated audiobooks
+├── docs/                         # Documentation and guides
+│   ├── images/                   # Screenshots
+│   └── vllm_blackwell_setup.md   # vLLM setup for RTX 50 series
+└── models/                       # Downloaded Maya1 model files
 ```
 
 ## Performance
 
-- **Generation Speed**: ~2x realtime (30 seconds of audio in 60 seconds)
-- **Quality**: Near-perfect duration accuracy for chunks of 40-60 words
-- **Memory**: ~6GB GPU VRAM for model, peaks at ~10GB during generation
+| Metric | Value |
+|--------|-------|
+| Generation Speed | ~2x realtime (30s audio in 60s) |
+| Optimal Chunk Size | 40-60 words |
+| GPU Memory | ~6GB VRAM (peaks at ~10GB) |
 
-## Speed Optimization (Future)
+## Speed Optimization (Experimental)
 
-For faster generation, consider using **vLLM** which provides:
-- **Automatic Prefix Caching** - Caches voice description for faster subsequent chunks
-- **Continuous Batching** - Process multiple chunks in parallel
-- **Sub-100ms streaming latency**
+For faster generation, the codebase includes experimental support for:
 
-See `models/maya1/vllm_streaming_inference.py` for the vLLM implementation.
+- **lmdeploy** - Up to 10x faster with batching (see `fast_maya_engine.py`)
+- **vLLM** - OpenAI-compatible API server with continuous batching
 
-```bash
-# Install vLLM (optional, for faster inference)
-pip install vllm
-```
+> **Note**: These require building from source for RTX 50 series (Blackwell) GPUs.
+> See `docs/vllm_blackwell_setup.md` for setup instructions.
 
 ## Logging
 
@@ -128,8 +141,6 @@ All conversions create a log file in the output directory:
 ```
 audiobook_output/conversion_BookName_20251210_120000.log
 ```
-
-Logs include timestamps, chunk progress, and any errors for debugging.
 
 ## License
 
@@ -139,3 +150,4 @@ MIT License - See LICENSE file for details.
 
 - **Maya1 Model**: [maya-research/maya1](https://huggingface.co/maya-research/maya1) - Apache 2.0
 - **SNAC Codec**: [hubertsiuzdak/snac_24khz](https://huggingface.co/hubertsiuzdak/snac_24khz)
+- **ttkbootstrap**: Dark theme GUI framework

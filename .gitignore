@@ -54,8 +54,9 @@ proof_log*.txt
 # Temporary files
 *.tmp
 *.temp
-temp_*
+temp_*/
 combined.wav
+conversion_progress.json
 
 # Audio files (generated)
 *.wav
@@ -69,3 +70,7 @@ Thumbs.db
 
 # Reference audio (user-provided)
 reference_audio/
+
+# Screenshots in root (keep docs/images/)
+Screenshot_*.png
+
