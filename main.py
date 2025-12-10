@@ -175,6 +175,44 @@ class AudiobookApp(ttk.Window):
         content_frame = ttk.Frame(self)
         content_frame.pack(fill=BOTH, expand=True, padx=20, pady=5)
         
+        # --- Right Panel: Book Details & Preview ---
+        # Pack Right Panel FIRST to ensure it reserves space
+        right_panel = ttk.Frame(content_frame, width=350)
+        right_panel.pack(side=RIGHT, fill=BOTH)
+        right_panel.pack_propagate(False)
+        
+        # 1. Book Info Card
+        info_card = ttk.Labelframe(right_panel, text="Book Details", padding=10)
+        info_card.pack(fill=X, pady=(0, 15))
+        
+        # Inner layout for Info Card
+        info_inner = ttk.Frame(info_card)
+        info_inner.pack(fill=X)
+        
+        # Cover Image (Left side of card)
+        self.cover_label = ttk.Label(info_inner, text="No Cover\nPreview", relief="flat", anchor=CENTER, foreground="#888")
+        self.cover_label.pack(side=LEFT, padx=(0, 15))
+        
+        # Stats (Right side of card)
+        stats_frame = ttk.Frame(info_inner)
+        stats_frame.pack(side=LEFT, fill=BOTH, expand=True)
+        
+        self.lbl_author = ttk.Label(stats_frame, text="Unknown Author", font=("Segoe UI", 11, "bold"))
+        self.lbl_author.pack(anchor=W, pady=(0, 5))
+        
+        self.lbl_chapter_count = ttk.Label(stats_frame, text="0 Chapters", font=("Segoe UI", 9))
+        self.lbl_chapter_count.pack(anchor=W)
+        
+        self.lbl_est_time = ttk.Label(stats_frame, text="Est. Time: --", font=("Segoe UI", 9), bootstyle="info")
+        self.lbl_est_time.pack(anchor=W, pady=(5, 0))
+
+        # 2. Text Preview
+        preview_frame = ttk.Labelframe(right_panel, text="Text Preview", padding=10)
+        preview_frame.pack(fill=BOTH, expand=True)
+        
+        self.preview_text = ScrolledText(preview_frame, height=10, wrap=tk.WORD, autohide=True, font=("Consolas", 9))
+        self.preview_text.pack(fill=BOTH, expand=True)
+
         # --- Left Panel: Chapters ---
         left_panel = ttk.Labelframe(content_frame, text="Chapter Selection", padding=10)
         left_panel.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 10))
@@ -216,43 +254,6 @@ class AudiobookApp(ttk.Window):
         
         self.chapter_tree.bind("<Button-1>", self.on_chapter_click)
         self.chapter_tree.bind("<<TreeviewSelect>>", self.on_chapter_select)
-
-        # --- Right Panel: Book Details & Preview ---
-        right_panel = ttk.Frame(content_frame, width=350)
-        right_panel.pack(side=RIGHT, fill=BOTH)
-        right_panel.pack_propagate(False)
-        
-        # 1. Book Info Card
-        info_card = ttk.Labelframe(right_panel, text="Book Details", padding=10)
-        info_card.pack(fill=X, pady=(0, 15))
-        
-        # Inner layout for Info Card
-        info_inner = ttk.Frame(info_card)
-        info_inner.pack(fill=X)
-        
-        # Cover Image (Left side of card)
-        self.cover_label = ttk.Label(info_inner, text="No Cover\nPreview", relief="flat", anchor=CENTER, foreground="#888")
-        self.cover_label.pack(side=LEFT, padx=(0, 15))
-        
-        # Stats (Right side of card)
-        stats_frame = ttk.Frame(info_inner)
-        stats_frame.pack(side=LEFT, fill=BOTH, expand=True)
-        
-        self.lbl_author = ttk.Label(stats_frame, text="Unknown Author", font=("Segoe UI", 11, "bold"))
-        self.lbl_author.pack(anchor=W, pady=(0, 5))
-        
-        self.lbl_chapter_count = ttk.Label(stats_frame, text="0 Chapters", font=("Segoe UI", 9))
-        self.lbl_chapter_count.pack(anchor=W)
-        
-        self.lbl_est_time = ttk.Label(stats_frame, text="Est. Time: --", font=("Segoe UI", 9), bootstyle="info")
-        self.lbl_est_time.pack(anchor=W, pady=(5, 0))
-
-        # 2. Text Preview
-        preview_frame = ttk.Labelframe(right_panel, text="Text Preview", padding=10)
-        preview_frame.pack(fill=BOTH, expand=True)
-        
-        self.preview_text = ScrolledText(preview_frame, height=10, wrap=tk.WORD, autohide=True, font=("Consolas", 9))
-        self.preview_text.pack(fill=BOTH, expand=True)
         
         # ===== CONTROL BAR =====
         control_panel = ttk.Frame(self)
