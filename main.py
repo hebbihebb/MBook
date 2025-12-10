@@ -113,6 +113,9 @@ class AudiobookApp(ttk.Window):
         self.elapsed_var = tk.StringVar(value="00:00:00")
         self.remaining_var = tk.StringVar(value="--:--:--")
         
+        # New: Selection info string
+        self.info_selected_var = tk.StringVar(value="0 selected")
+        
         # Parsed EPUB data
         self.parsed_epub: ParsedEpub = None
         self.chapter_selection = {}  # chapter_order -> BooleanVar
@@ -137,49 +140,55 @@ class AudiobookApp(ttk.Window):
         """Build the complete GUI layout."""
         
         # ===== HEADER =====
+        # Cleaner header with better spacing
         header_frame = ttk.Frame(self)
-        header_frame.pack(fill=X, padx=20, pady=(15, 10))
+        header_frame.pack(fill=X, padx=20, pady=(20, 15))
         
         lbl_header = ttk.Label(
             header_frame,
-            text="🎧 Maya1 Audiobook Generator",
-            font=("Helvetica", 20, "bold"),
+            text="🎧 Maya1 Audiobook Converter",
+            font=("Segoe UI", 24, "bold"),
             bootstyle="primary"
         )
         lbl_header.pack(side=LEFT)
         
-        # ===== FILE SELECTION =====
-        file_frame = ttk.Frame(self)
-        file_frame.pack(fill=X, padx=20, pady=5)
+        # ===== PROJECT SETUP =====
+        # Group file controls into a clean section
+        setup_frame = ttk.Labelframe(self, text="Project Setup", padding=15)
+        setup_frame.pack(fill=X, padx=20, pady=(0, 15))
         
-        # EPUB row
-        ttk.Label(file_frame, text="EPUB:", width=8).grid(row=0, column=0, sticky=W, pady=3)
-        ttk.Entry(file_frame, textvariable=self.epub_path, width=60).grid(row=0, column=1, padx=5, pady=3, sticky=EW)
-        ttk.Button(file_frame, text="Browse", command=self.browse_epub, bootstyle="secondary-outline", width=10).grid(row=0, column=2, padx=5)
+        # Grid layout for setup
+        setup_frame.columnconfigure(1, weight=1)
         
-        # Output row
-        ttk.Label(file_frame, text="Output:", width=8).grid(row=1, column=0, sticky=W, pady=3)
-        ttk.Entry(file_frame, textvariable=self.output_dir, width=60).grid(row=1, column=1, padx=5, pady=3, sticky=EW)
-        ttk.Button(file_frame, text="Browse", command=self.browse_output_dir, bootstyle="secondary-outline", width=10).grid(row=1, column=2, padx=5)
+        # Row 0: EPUB Input
+        ttk.Label(setup_frame, text="EPUB File:", font=("Segoe UI", 10)).grid(row=0, column=0, sticky=W, pady=5)
+        ttk.Entry(setup_frame, textvariable=self.epub_path).grid(row=0, column=1, sticky=EW, padx=10, pady=5)
+        ttk.Button(setup_frame, text="📂 Browse", command=self.browse_epub, bootstyle="secondary-outline").grid(row=0, column=2, padx=5)
         
-        file_frame.columnconfigure(1, weight=1)
+        # Row 1: Output Directory
+        ttk.Label(setup_frame, text="Output Folder:", font=("Segoe UI", 10)).grid(row=1, column=0, sticky=W, pady=5)
+        ttk.Entry(setup_frame, textvariable=self.output_dir).grid(row=1, column=1, sticky=EW, padx=10, pady=5)
+        ttk.Button(setup_frame, text="📂 Browse", command=self.browse_output_dir, bootstyle="secondary-outline").grid(row=1, column=2, padx=5)
         
-        # ===== MAIN CONTENT AREA =====
+        # ===== MAIN CONTENT =====
+        # Split view: Chapters (Left) vs Details (Right)
         content_frame = ttk.Frame(self)
-        content_frame.pack(fill=BOTH, expand=True, padx=20, pady=10)
+        content_frame.pack(fill=BOTH, expand=True, padx=20, pady=5)
         
-        # Left panel: Chapter list
-        left_frame = ttk.Labelframe(content_frame, text="📖 Chapters", padding=10)
-        left_frame.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 10))
+        # --- Left Panel: Chapters ---
+        left_panel = ttk.Labelframe(content_frame, text="Chapter Selection", padding=10)
+        left_panel.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 10))
         
-        # Select buttons
-        btn_row = ttk.Frame(left_frame)
-        btn_row.pack(fill=X, pady=(0, 5))
-        ttk.Button(btn_row, text="☑ Select All", command=self.select_all_chapters, bootstyle="info-outline", width=12).pack(side=LEFT, padx=2)
-        ttk.Button(btn_row, text="☐ Clear All", command=self.deselect_all_chapters, bootstyle="secondary-outline", width=12).pack(side=LEFT, padx=2)
+        # Toolbar for chapters
+        toolbar = ttk.Frame(left_panel)
+        toolbar.pack(fill=X, pady=(0, 5))
         
-        # Chapter treeview with checkboxes
-        tree_frame = ttk.Frame(left_frame)
+        ttk.Button(toolbar, text="✓ All", command=self.select_all_chapters, bootstyle="link", width=6).pack(side=LEFT)
+        ttk.Button(toolbar, text="✗ None", command=self.deselect_all_chapters, bootstyle="link", width=6).pack(side=LEFT)
+        ttk.Label(toolbar, textvariable=self.info_selected_var, font=("Segoe UI", 9), bootstyle="secondary").pack(side=RIGHT)
+        
+        # Treeview
+        tree_frame = ttk.Frame(left_panel)
         tree_frame.pack(fill=BOTH, expand=True)
         
         self.chapter_tree = ttk.Treeview(
@@ -187,103 +196,114 @@ class AudiobookApp(ttk.Window):
             columns=("selected", "title", "chars"),
             show="headings",
             selectmode="browse",
-            height=12
+            height=10,
+            bootstyle="primary"
         )
-        self.chapter_tree.heading("selected", text="☑")
-        self.chapter_tree.heading("title", text="Chapter")
-        self.chapter_tree.heading("chars", text="Size")
-        self.chapter_tree.column("selected", width=30, anchor=CENTER)
-        self.chapter_tree.column("title", width=200)
-        self.chapter_tree.column("chars", width=60, anchor=E)
+        self.chapter_tree.heading("selected", text="✓")
+        self.chapter_tree.heading("title", text="Chapter Title")
+        self.chapter_tree.heading("chars", text="Length")
         
+        self.chapter_tree.column("selected", width=40, anchor=CENTER)
+        self.chapter_tree.column("title", width=250)
+        self.chapter_tree.column("chars", width=80, anchor=E)
+        
+        # Scrollbar
         scrollbar = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.chapter_tree.yview)
         self.chapter_tree.configure(yscrollcommand=scrollbar.set)
         
         self.chapter_tree.pack(side=LEFT, fill=BOTH, expand=True)
         scrollbar.pack(side=RIGHT, fill=Y)
         
-        # Bind click to toggle checkbox
         self.chapter_tree.bind("<Button-1>", self.on_chapter_click)
         self.chapter_tree.bind("<<TreeviewSelect>>", self.on_chapter_select)
+
+        # --- Right Panel: Book Details & Preview ---
+        right_panel = ttk.Frame(content_frame, width=350)
+        right_panel.pack(side=RIGHT, fill=BOTH)
+        right_panel.pack_propagate(False)
         
-        # Right panel: Preview + Info + Cover
-        right_frame = ttk.Frame(content_frame, width=320)
-        right_frame.pack(side=RIGHT, fill=BOTH, padx=(10, 0))
-        right_frame.pack_propagate(False)
+        # 1. Book Info Card
+        info_card = ttk.Labelframe(right_panel, text="Book Details", padding=10)
+        info_card.pack(fill=X, pady=(0, 15))
         
-        # Chapter preview
-        preview_frame = ttk.Labelframe(right_frame, text="📄 Chapter Preview", padding=10)
-        preview_frame.pack(fill=BOTH, expand=True, pady=(0, 10))
+        # Inner layout for Info Card
+        info_inner = ttk.Frame(info_card)
+        info_inner.pack(fill=X)
         
-        self.preview_text = ScrolledText(preview_frame, height=8, wrap=tk.WORD, autohide=True)
+        # Cover Image (Left side of card)
+        self.cover_label = ttk.Label(info_inner, text="No Cover\nPreview", relief="flat", anchor=CENTER, foreground="#888")
+        self.cover_label.pack(side=LEFT, padx=(0, 15))
+        
+        # Stats (Right side of card)
+        stats_frame = ttk.Frame(info_inner)
+        stats_frame.pack(side=LEFT, fill=BOTH, expand=True)
+        
+        self.lbl_author = ttk.Label(stats_frame, text="Unknown Author", font=("Segoe UI", 11, "bold"))
+        self.lbl_author.pack(anchor=W, pady=(0, 5))
+        
+        self.lbl_chapter_count = ttk.Label(stats_frame, text="0 Chapters", font=("Segoe UI", 9))
+        self.lbl_chapter_count.pack(anchor=W)
+        
+        self.lbl_est_time = ttk.Label(stats_frame, text="Est. Time: --", font=("Segoe UI", 9), bootstyle="info")
+        self.lbl_est_time.pack(anchor=W, pady=(5, 0))
+
+        # 2. Text Preview
+        preview_frame = ttk.Labelframe(right_panel, text="Text Preview", padding=10)
+        preview_frame.pack(fill=BOTH, expand=True)
+        
+        self.preview_text = ScrolledText(preview_frame, height=10, wrap=tk.WORD, autohide=True, font=("Consolas", 9))
         self.preview_text.pack(fill=BOTH, expand=True)
         
-        # Info + Cover row
-        info_cover_frame = ttk.Frame(right_frame)
-        info_cover_frame.pack(fill=X)
-        
-        # Book info
-        info_frame = ttk.Labelframe(info_cover_frame, text="📊 Info", padding=10)
-        info_frame.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 5))
-        
-        self.info_author = ttk.Label(info_frame, text="Author: --", font=("Helvetica", 9))
-        self.info_author.pack(anchor=W)
-        self.info_chapters = ttk.Label(info_frame, text="Chapters: --", font=("Helvetica", 9))
-        self.info_chapters.pack(anchor=W)
-        self.info_selected = ttk.Label(info_frame, text="Selected: --", font=("Helvetica", 9))
-        self.info_selected.pack(anchor=W)
-        self.info_estimate = ttk.Label(info_frame, text="Est. Time: --", font=("Helvetica", 9))
-        self.info_estimate.pack(anchor=W)
-        
-        # Cover image
-        cover_frame = ttk.Labelframe(info_cover_frame, text="🖼 Cover", padding=5)
-        cover_frame.pack(side=RIGHT, fill=Y, padx=(5, 0))
-        
-        self.cover_label = ttk.Label(cover_frame, text="No Cover", width=12)
-        self.cover_label.pack()
-        
         # ===== CONTROL BAR =====
-        control_frame = ttk.Frame(self)
-        control_frame.pack(fill=X, padx=20, pady=10)
+        control_panel = ttk.Frame(self)
+        control_panel.pack(fill=X, padx=20, pady=15)
         
-        # Buttons
-        btn_frame = ttk.Frame(control_frame)
-        btn_frame.pack(side=LEFT)
+        # Top Row: Progress
+        progress_frame = ttk.Frame(control_panel)
+        progress_frame.pack(fill=X, pady=(0, 10))
         
-        self.btn_start = ttk.Button(btn_frame, text="▶ Start", command=self.start_conversion, bootstyle="success", width=10)
-        self.btn_start.pack(side=LEFT, padx=3)
+        # Status Label & Time
+        status_row = ttk.Frame(progress_frame)
+        status_row.pack(fill=X, pady=(0, 5))
+        ttk.Label(status_row, textvariable=self.status_var, font=("Segoe UI", 10, "italic")).pack(side=LEFT)
         
-        self.btn_pause = ttk.Button(btn_frame, text="⏸ Pause", command=self.pause_conversion, bootstyle="warning", width=10, state=DISABLED)
-        self.btn_pause.pack(side=LEFT, padx=3)
+        time_display = ttk.Frame(status_row)
+        time_display.pack(side=RIGHT)
+        ttk.Label(time_display, text="Elapsed: ", bootstyle="secondary").pack(side=LEFT)
+        ttk.Label(time_display, textvariable=self.elapsed_var, font=("Segoe UI", 10, "bold")).pack(side=LEFT, padx=(0, 15))
+        ttk.Label(time_display, text="Remaining: ", bootstyle="secondary").pack(side=LEFT)
+        ttk.Label(time_display, textvariable=self.remaining_var, font=("Segoe UI", 10, "bold"), bootstyle="warning").pack(side=LEFT)
         
-        self.btn_cancel = ttk.Button(btn_frame, text="⏹ Cancel", command=self.cancel_conversion, bootstyle="danger", width=10, state=DISABLED)
-        self.btn_cancel.pack(side=LEFT, padx=3)
+        # The Bar
+        self.progressbar = ttk.Progressbar(progress_frame, variable=self.progress_var, maximum=100, bootstyle="striped-success", length=200)
+        self.progressbar.pack(fill=X)
         
-        self.btn_voice = ttk.Button(btn_frame, text="⚙ Voice", command=self.edit_voice_prompt, bootstyle="info-outline", width=10)
-        self.btn_voice.pack(side=LEFT, padx=10)
+        # Bottom Row: Buttons
+        btn_frame = ttk.Frame(control_panel)
+        btn_frame.pack(fill=X)
         
-        # Progress bar
-        self.progressbar = ttk.Progressbar(control_frame, variable=self.progress_var, maximum=100, bootstyle="striped", length=250)
-        self.progressbar.pack(side=RIGHT, padx=10)
+        # Main Action Button (Big)
+        self.btn_start = ttk.Button(btn_frame, text="▶ START CONVERSION", command=self.start_conversion, bootstyle="success", width=25)
+        self.btn_start.pack(side=LEFT)
         
-        # ===== STATUS BAR =====
-        status_frame = ttk.Frame(self)
-        status_frame.pack(fill=X, padx=20, pady=(0, 5))
+        ttk.Separator(btn_frame, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=20)
         
-        ttk.Label(status_frame, textvariable=self.status_var, font=("Helvetica", 10)).pack(side=LEFT)
+        # Transport Controls
+        self.btn_pause = ttk.Button(btn_frame, text="⏸ Pause", command=self.pause_conversion, state=DISABLED, bootstyle="warning-outline", width=10)
+        self.btn_pause.pack(side=LEFT, padx=5)
         
-        time_frame = ttk.Frame(status_frame)
-        time_frame.pack(side=RIGHT)
-        ttk.Label(time_frame, text="Elapsed:", font=("Helvetica", 9), bootstyle="secondary").pack(side=LEFT)
-        ttk.Label(time_frame, textvariable=self.elapsed_var, font=("Helvetica", 9, "bold")).pack(side=LEFT, padx=(2, 15))
-        ttk.Label(time_frame, text="Remaining:", font=("Helvetica", 9), bootstyle="secondary").pack(side=LEFT)
-        ttk.Label(time_frame, textvariable=self.remaining_var, font=("Helvetica", 9, "bold")).pack(side=LEFT, padx=2)
+        self.btn_cancel = ttk.Button(btn_frame, text="⏹ Cancel", command=self.cancel_conversion, state=DISABLED, bootstyle="danger-outline", width=10)
+        self.btn_cancel.pack(side=LEFT, padx=5)
         
-        # ===== LOG PANEL (Collapsible) =====
-        self.log_frame = ttk.Labelframe(self, text="▼ Log", padding=5)
-        self.log_frame.pack(fill=X, padx=20, pady=(5, 15))
+        # Voice Settings (Right aligned)
+        self.btn_voice = ttk.Button(btn_frame, text="🎙 Voice Settings", command=self.edit_voice_prompt, bootstyle="info-outline")
+        self.btn_voice.pack(side=RIGHT)
         
-        self.log_text = ScrolledText(self.log_frame, height=5, wrap=tk.WORD, autohide=True)
+        # ===== LOG PANEL =====
+        self.log_expander = ttk.Labelframe(self, text="Log Output", padding=5)
+        self.log_expander.pack(fill=X, padx=20, pady=(0, 20))
+        
+        self.log_text = ScrolledText(self.log_expander, height=6, wrap=tk.WORD, autohide=True, font=("Consolas", 8))
         self.log_text.pack(fill=X)
         
     def browse_epub(self):
@@ -332,8 +352,8 @@ class AudiobookApp(ttk.Window):
                 )
             
             # Update info panel
-            self.info_author.config(text=f"Author: {self.parsed_epub.author}")
-            self.info_chapters.config(text=f"Chapters: {len(self.parsed_epub.chapters)}")
+            self.lbl_author.config(text=f"{self.parsed_epub.author}")
+            self.lbl_chapter_count.config(text=f"{len(self.parsed_epub.chapters)} Chapters")
             self.update_selection_info()
             
             # Load cover image
@@ -438,10 +458,10 @@ class AudiobookApp(ttk.Window):
     def update_selection_info(self):
         """Update the selection count and time estimate."""
         selected = [o for o, v in self.chapter_selection.items() if v.get()]
-        self.info_selected.config(text=f"Selected: {len(selected)}")
+        self.info_selected_var.set(f"{len(selected)} selected")
         
         if not self.parsed_epub:
-            self.info_estimate.config(text="Est. Time: --")
+            self.lbl_est_time.config(text="Est. Time: --")
             return
         
         # Estimate based on selected chapters
@@ -457,7 +477,7 @@ class AudiobookApp(ttk.Window):
         else:
             est_str = f"~{estimated_seconds/3600:.1f} hr"
         
-        self.info_estimate.config(text=f"Est. Time: {est_str}")
+        self.lbl_est_time.config(text=f"Est. Time: {est_str}")
     
     def check_resume(self):
         """Check if there's a resumable conversion."""
