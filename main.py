@@ -32,6 +32,13 @@ try:
 except ImportError as e:
     print(f"Warning: Missing dependencies: {e}")
 
+# Check for optional batch processing support
+try:
+    from fast_maya_engine import is_lmdeploy_available
+    BATCH_MODE_AVAILABLE = is_lmdeploy_available()
+except ImportError:
+    BATCH_MODE_AVAILABLE = False
+
 
 class VoicePromptDialog(tk.Toplevel):
     """Dialog for editing the Maya1 voice prompt."""
@@ -133,6 +140,10 @@ class AudiobookApp(ttk.Window):
         
         # Resume state
         self.resumable_progress: ConversionProgress = None
+        
+        # Batch processing state
+        self.use_batch_mode = tk.BooleanVar(value=False)
+        self.batch_size_var = tk.IntVar(value=4)  # Process 4 chunks at a time
         
         self.create_widgets()
         
@@ -299,6 +310,19 @@ class AudiobookApp(ttk.Window):
         # Voice Settings (Right aligned)
         self.btn_voice = ttk.Button(btn_frame, text="🎙 Voice Settings", command=self.edit_voice_prompt, bootstyle="info-outline")
         self.btn_voice.pack(side=RIGHT)
+        
+        # Batch mode checkbox (only show if lmdeploy available)
+        if BATCH_MODE_AVAILABLE:
+            self.chk_batch = ttk.Checkbutton(
+                btn_frame,
+                text="⚡ Batch Mode",
+                variable=self.use_batch_mode,
+                bootstyle="success-round-toggle"
+            )
+            self.chk_batch.pack(side=RIGHT, padx=15)
+            
+            # Tooltip-like label
+            ttk.Label(btn_frame, text="(Faster)", font=("Segoe UI", 8), bootstyle="secondary").pack(side=RIGHT)
         
         # ===== LOG PANEL =====
         self.log_expander = ttk.Labelframe(self, text="Log Output", padding=5)
@@ -646,57 +670,123 @@ class AudiobookApp(ttk.Window):
             self.update_status("Loading model...")
             self.update_progress(5)
             
-            from convert_epub_to_audiobook import LOCAL_MODEL_DIR
-            import torch
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Determine which engine to use
+            use_batch = self.use_batch_mode.get() and BATCH_MODE_AVAILABLE
+            batch_size = self.batch_size_var.get()
             
-            engine = Maya1TTSEngine(LOCAL_MODEL_DIR, device)
-            engine.load()
+            if use_batch:
+                self.log("Using FastMaya batch engine...")
+                from fast_maya_engine import FastMaya1Engine
+                engine = FastMaya1Engine(memory_util=0.5, use_upsampler=True)
+                engine.load()
+                sample_rate = engine.sample_rate
+            else:
+                from convert_epub_to_audiobook import LOCAL_MODEL_DIR
+                import torch
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                engine = Maya1TTSEngine(LOCAL_MODEL_DIR, device)
+                engine.load()
+                sample_rate = 24000
             
             self.log("Model loaded")
             self.update_status("Generating audio...")
             
-            # Generate chunks
-            for i in range(start_idx, total_chunks):
-                if self.cancel_event.is_set():
-                    save_progress(output_dir, progress)
-                    self.log("Cancelled - progress saved")
-                    break
-                
-                # Wait if paused
-                while self.pause_event.is_set() and not self.cancel_event.is_set():
-                    time.sleep(0.5)
-                
-                if self.cancel_event.is_set():
-                    save_progress(output_dir, progress)
-                    break
-                
-                chunk = all_chunks[i]
-                chapter_title = chapter_titles[chunk_to_chapter[i]]
-                
-                self.update_status(f"Chunk {i+1}/{total_chunks} | {chapter_title}")
-                
-                try:
-                    audio = engine.generate_audio(chunk, self.voice_prompt, max_duration_sec=60)
-                    
-                    if audio is not None and len(audio) > 0:
-                        chunk_path = os.path.join(temp_dir, f"chunk_{i:04d}.wav")
-                        sf.write(chunk_path, audio, 24000)
-                        
-                        progress.completed_chunks.append(i)
-                        progress.chunk_files[i] = chunk_path
-                        
-                        # Save progress after each chunk
+            # Generate chunks - batch or sequential
+            if use_batch:
+                # Batch processing mode
+                i = start_idx
+                while i < total_chunks:
+                    if self.cancel_event.is_set():
                         save_progress(output_dir, progress)
-                    else:
-                        self.log(f"Warning: Empty audio for chunk {i}")
+                        self.log("Cancelled - progress saved")
+                        break
+                    
+                    # Wait if paused
+                    while self.pause_event.is_set() and not self.cancel_event.is_set():
+                        time.sleep(0.5)
+                    
+                    if self.cancel_event.is_set():
+                        save_progress(output_dir, progress)
+                        break
+                    
+                    # Get batch of chunks
+                    batch_end = min(i + batch_size, total_chunks)
+                    batch_texts = all_chunks[i:batch_end]
+                    batch_chapters = [chapter_titles[chunk_to_chapter[j]] for j in range(i, batch_end)]
+                    
+                    self.update_status(f"Batch {i+1}-{batch_end}/{total_chunks} | {batch_chapters[0]}")
+                    
+                    try:
+                        # Generate batch
+                        audios = engine.batch_generate(batch_texts, self.voice_prompt, return_concatenated=False)
                         
-                except Exception as e:
-                    self.log(f"Error on chunk {i}: {e}")
-                
-                # Update progress (10% to 85%)
-                pct = 10 + (i / total_chunks) * 75
-                self.update_progress(pct)
+                        # Save each audio
+                        for batch_idx, audio in enumerate(audios):
+                            chunk_idx = i + batch_idx
+                            if audio is not None and len(audio) > 0:
+                                chunk_path = os.path.join(temp_dir, f"chunk_{chunk_idx:04d}.wav")
+                                sf.write(chunk_path, audio, sample_rate)
+                                
+                                progress.completed_chunks.append(chunk_idx)
+                                progress.chunk_files[chunk_idx] = chunk_path
+                            else:
+                                self.log(f"Warning: Empty audio for chunk {chunk_idx}")
+                        
+                        # Save progress after each batch
+                        save_progress(output_dir, progress)
+                        
+                    except Exception as e:
+                        self.log(f"Error on batch {i}-{batch_end}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                    
+                    # Update progress (10% to 85%)
+                    pct = 10 + (batch_end / total_chunks) * 75
+                    self.update_progress(pct)
+                    
+                    i = batch_end
+            else:
+                # Sequential processing (original behavior)
+                for i in range(start_idx, total_chunks):
+                    if self.cancel_event.is_set():
+                        save_progress(output_dir, progress)
+                        self.log("Cancelled - progress saved")
+                        break
+                    
+                    # Wait if paused
+                    while self.pause_event.is_set() and not self.cancel_event.is_set():
+                        time.sleep(0.5)
+                    
+                    if self.cancel_event.is_set():
+                        save_progress(output_dir, progress)
+                        break
+                    
+                    chunk = all_chunks[i]
+                    chapter_title = chapter_titles[chunk_to_chapter[i]]
+                    
+                    self.update_status(f"Chunk {i+1}/{total_chunks} | {chapter_title}")
+                    
+                    try:
+                        audio = engine.generate_audio(chunk, self.voice_prompt, max_duration_sec=60)
+                        
+                        if audio is not None and len(audio) > 0:
+                            chunk_path = os.path.join(temp_dir, f"chunk_{i:04d}.wav")
+                            sf.write(chunk_path, audio, sample_rate)
+                            
+                            progress.completed_chunks.append(i)
+                            progress.chunk_files[i] = chunk_path
+                            
+                            # Save progress after each chunk
+                            save_progress(output_dir, progress)
+                        else:
+                            self.log(f"Warning: Empty audio for chunk {i}")
+                            
+                    except Exception as e:
+                        self.log(f"Error on chunk {i}: {e}")
+                    
+                    # Update progress (10% to 85%)
+                    pct = 10 + (i / total_chunks) * 75
+                    self.update_progress(pct)
             
             # Check if cancelled
             if self.cancel_event.is_set():
