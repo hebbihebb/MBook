@@ -1,0 +1,2 @@
+# This directory contains the Maya1 model files
+# Download with: python -c "from huggingface_hub import snapshot_download; snapshot_download('maya-research/maya1', local_dir='models/maya1')"

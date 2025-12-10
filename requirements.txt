@@ -1,0 +1,36 @@
+# MBook - Maya1 Audiobook Generator
+# Core dependencies
+
+# PyTorch (install separately for CUDA support)
+# pip install torch --index-url https://download.pytorch.org/whl/cu121
+torch
+
+# Transformers and model loading
+transformers
+accelerate
+huggingface_hub
+
+# SNAC audio codec
+snac
+
+# EPUB parsing
+ebooklib
+beautifulsoup4
+
+# Audio processing
+pydub
+soundfile
+scipy
+
+# Text processing
+spacy
+num2words
+
+# GUI (optional)
+ttkbootstrap
+
+# Utilities
+numpy
+
+# Optional: faster inference with vLLM
+# pip install vllm

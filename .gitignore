@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Models (large files - download separately)
+models/maya1/
+!models/.gitkeep
+
+# Generated outputs
+audiobook_output/
+generated_samples/
+
+# Test EPUB files (user-provided)
+*.epub
+
+# Log files
+*.log
+*_log.txt
+debug_log.txt
+gen_log*.txt
+proof_log*.txt
+
+# Temporary files
+*.tmp
+*.temp
+temp_*
+combined.wav
+
+# Audio files (generated)
+*.wav
+*.m4b
+*.mp3
+*.m4a
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Reference audio (user-provided)
+reference_audio/
