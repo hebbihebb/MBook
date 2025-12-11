@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const clearAllBtn = document.getElementById("clear-all");
     const selectAllCheckbox = document.getElementById("select-all-checkbox");
     const generateBtn = document.getElementById("generate-btn");
+    const pauseBtn = document.getElementById("pause-btn");
+    const cancelBtn = document.getElementById("cancel-btn");
     const consoleOutput = document.getElementById("console-output");
 
     const bookTitleInfo = document.getElementById("book-title-info");
@@ -21,6 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let chapters = [];
     let pollInterval = null;
     let displayedLogs = new Set();
+    let isPaused = false;
 
     const logToConsole = (message, level = "info") => {
         const timestamp = new Date().toLocaleTimeString();
@@ -120,8 +123,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 const data = await response.json();
 
                 // Update progress display
-                if (data.progress !== undefined) {
+                if (data.progress !== undefined && data.status === "running") {
                     bookStatus.textContent = `GENERATING (${Math.round(data.progress)}%)`;
+                }
+
+                // Sync pause button state
+                if (data.status === "paused") {
+                    isPaused = true;
+                    pauseBtn.innerHTML = '<span class="material-symbols-outlined text-sm">play_arrow</span> RES';
+                    bookStatus.textContent = "PAUSED";
+                    bookStatus.className = "text-console-warning font-medium";
+                } else if (data.status === "running" && isPaused) {
+                    isPaused = false;
+                    pauseBtn.innerHTML = '<span class="material-symbols-outlined text-sm">pause</span> PAU';
                 }
 
                 // Display new logs
@@ -187,6 +201,10 @@ document.addEventListener("DOMContentLoaded", () => {
         // Clear previous logs
         displayedLogs.clear();
 
+        // Reset pause state
+        isPaused = false;
+        pauseBtn.innerHTML = '<span class="material-symbols-outlined text-sm">pause</span> PAU';
+
         try {
             const response = await fetch("/api/generate", {
                 method: "POST",
@@ -210,6 +228,53 @@ document.addEventListener("DOMContentLoaded", () => {
             logToConsole(`Failed to start: ${error}`, "error");
             bookStatus.textContent = "ERROR";
             bookStatus.className = "text-console-error font-medium";
+        }
+    });
+
+    pauseBtn.addEventListener("click", async () => {
+        const action = isPaused ? "resume" : "pause";
+
+        try {
+            const response = await fetch("/api/pause", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action })
+            });
+
+            const data = await response.json();
+
+            if (data.status === "paused") {
+                isPaused = true;
+                pauseBtn.innerHTML = '<span class="material-symbols-outlined text-sm">play_arrow</span> RES';
+                logToConsole("Conversion paused", "info");
+                bookStatus.textContent = "PAUSED";
+                bookStatus.className = "text-console-warning font-medium";
+            } else if (data.status === "running") {
+                isPaused = false;
+                pauseBtn.innerHTML = '<span class="material-symbols-outlined text-sm">pause</span> PAU';
+                logToConsole("Conversion resumed", "info");
+                bookStatus.textContent = "RESUMING...";
+                bookStatus.className = "text-console-info font-medium";
+            }
+        } catch (error) {
+            logToConsole(`Failed to ${action}: ${error}`, "error");
+        }
+    });
+
+    cancelBtn.addEventListener("click", async () => {
+        if (!confirm("Cancel conversion? Progress will be saved and you can resume later.")) {
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/cancel", { method: "POST" });
+            const data = await response.json();
+
+            if (data.status === "cancelling") {
+                logToConsole("Cancellation requested...", "warning");
+            }
+        } catch (error) {
+            logToConsole(`Failed to cancel: ${error}`, "error");
         }
     });
 

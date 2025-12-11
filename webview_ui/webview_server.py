@@ -148,5 +148,37 @@ def get_status():
             "final_path": conversion_state.final_path
         })
 
+@app.route("/api/pause", methods=["POST"])
+def pause_conversion():
+    """Pause or resume conversion."""
+    if not conversion_state:
+        return jsonify({"error": "No conversion running"}), 400
+
+    data = request.get_json()
+    action = data.get("action", "pause") if data else "pause"
+
+    if action == "pause":
+        conversion_state.pause_event.set()
+        with conversion_state.lock:
+            conversion_state.status = "paused"
+        conversion_state.add_log("Conversion paused", "info")
+        return jsonify({"status": "paused"})
+    else:  # resume
+        conversion_state.pause_event.clear()
+        with conversion_state.lock:
+            conversion_state.status = "running"
+        conversion_state.add_log("Conversion resumed", "info")
+        return jsonify({"status": "running"})
+
+@app.route("/api/cancel", methods=["POST"])
+def cancel_conversion():
+    """Cancel conversion."""
+    if not conversion_state:
+        return jsonify({"error": "No conversion running"}), 400
+
+    conversion_state.cancel_event.set()
+    conversion_state.add_log("Cancellation requested...", "warning")
+    return jsonify({"status": "cancelling"})
+
 if __name__ == "__main__":
     app.run(port=5000, threaded=True)  # Enable threading for concurrent requests
