@@ -97,7 +97,20 @@ class VoicePromptDialog(tk.Toplevel):
         self.geometry(f"+{x}+{y}")
         
     def save(self):
-        self.result = self.text.get("1.0", tk.END).strip()
+        result = self.text.get("1.0", tk.END).strip()
+
+        # Validate voice prompt
+        if not result:
+            import tkinter.messagebox as messagebox
+            messagebox.showwarning("Invalid Input", "Voice prompt cannot be empty.")
+            return
+
+        if len(result) > 1000:
+            import tkinter.messagebox as messagebox
+            messagebox.showwarning("Invalid Input", "Voice prompt is too long (max 1000 characters).")
+            return
+
+        self.result = result
         self.destroy()
         
     def cancel(self):
@@ -357,6 +370,25 @@ class AudiobookApp(ttk.Window):
         """Parse EPUB and populate chapter list."""
         try:
             self.log(f"Loading: {os.path.basename(epub_path)}")
+
+            # Validate EPUB file
+            if not os.path.exists(epub_path):
+                raise FileNotFoundError(f"EPUB file not found: {epub_path}")
+
+            if not os.access(epub_path, os.R_OK):
+                raise PermissionError(f"Cannot read EPUB file (permission denied): {epub_path}")
+
+            # Check file size (warn if > 100MB, fail if > 500MB)
+            file_size_mb = os.path.getsize(epub_path) / (1024 * 1024)
+            if file_size_mb > 500:
+                raise ValueError(f"EPUB file too large ({file_size_mb:.1f}MB). Maximum supported size is 500MB.")
+            elif file_size_mb > 100:
+                self.log(f"Warning: Large EPUB file ({file_size_mb:.1f}MB) may take longer to process")
+
+            # Validate it's actually an EPUB file (basic check)
+            if not epub_path.lower().endswith('.epub'):
+                self.log("Warning: File does not have .epub extension, attempting to parse anyway")
+
             self.parsed_epub = parse_epub_with_chapters(epub_path)
             
             # Clear existing items
@@ -617,8 +649,19 @@ class AudiobookApp(ttk.Window):
             
             epub_path = self.epub_path.get()
             output_dir = self.output_dir.get()
+
+            # Create and validate output directory
             os.makedirs(output_dir, exist_ok=True)
-            
+
+            # Test if directory is writable
+            test_file = os.path.join(output_dir, ".write_test")
+            try:
+                with open(test_file, 'w') as f:
+                    f.write("test")
+                os.remove(test_file)
+            except (OSError, PermissionError) as e:
+                raise PermissionError(f"Output directory is not writable: {output_dir}. Error: {e}")
+
             temp_dir = os.path.join(output_dir, "temp_chunks")
             os.makedirs(temp_dir, exist_ok=True)
             
@@ -679,6 +722,14 @@ class AudiobookApp(ttk.Window):
             # Determine which engine to use
             use_batch = self.use_batch_mode.get() and BATCH_MODE_AVAILABLE
             batch_size = self.batch_size_var.get()
+
+            # Validate batch size
+            if batch_size < 1:
+                raise ValueError(f"Batch size must be at least 1, got: {batch_size}")
+            if batch_size > 32:
+                self.log(f"Warning: Large batch size ({batch_size}) may cause memory issues")
+                if batch_size > 64:
+                    raise ValueError(f"Batch size too large (max 64), got: {batch_size}")
             
             if use_batch:
                 self.log("Using FastMaya batch engine...")
@@ -859,20 +910,20 @@ class AudiobookApp(ttk.Window):
             for path in audio_files:
                 try:
                     os.remove(path)
-                except:
-                    pass
-            
+                except OSError as e:
+                    self.log(f"Warning: Failed to remove {path}: {e}")
+
             for temp in [output_wav, chapters_file, cover_path]:
                 if temp and os.path.exists(temp):
                     try:
                         os.remove(temp)
-                    except:
-                        pass
-            
+                    except OSError as e:
+                        self.log(f"Warning: Failed to remove {temp}: {e}")
+
             try:
                 os.rmdir(temp_dir)
-            except:
-                pass
+            except OSError as e:
+                self.log(f"Warning: Failed to remove temp directory: {e}")
             
             cleanup_progress(output_dir)
             

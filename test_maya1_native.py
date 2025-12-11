@@ -251,11 +251,11 @@ def run_progressive_tests():
         model_path,
         torch_dtype=torch.bfloat16,
         device_map="auto",
-        trust_remote_code=True
+        trust_remote_code=True  # SECURITY: Only for trusted maya-research/maya1 model
     )
     tokenizer = AutoTokenizer.from_pretrained(
         model_path,
-        trust_remote_code=True
+        trust_remote_code=True  # SECURITY: Only for trusted maya-research/maya1 model
     )
     print(f"[SETUP] Maya1 Model loaded: {len(tokenizer)} tokens in vocabulary")
     

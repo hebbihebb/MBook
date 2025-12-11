@@ -104,27 +104,62 @@ class Maya1TTSEngine:
     def load(self):
         """Load all models."""
         print("[ENGINE] Loading Maya1 model...")
-        
+
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from snac import SNAC
-        
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_path,
-            torch_dtype=torch.bfloat16,
-            device_map="auto",
-            trust_remote_code=True
-        )
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path,
-            trust_remote_code=True
-        )
-        print(f"[ENGINE] Maya1 loaded: {len(self.tokenizer)} tokens")
-        
-        print("[ENGINE] Loading SNAC decoder...")
-        self.snac_model = SNAC.from_pretrained(SNAC_MODEL_ID).eval()
-        if self.device == "cuda":
-            self.snac_model = self.snac_model.to(self.device)
-        print("[ENGINE] SNAC decoder loaded")
+
+        try:
+            # SECURITY WARNING: trust_remote_code=True allows arbitrary code execution
+            # from HuggingFace Hub. Only use with trusted models like maya-research/maya1.
+            # If the model repository is compromised, malicious code could execute.
+            # For production use, consider downloading models locally and auditing code.
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_path,
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+                trust_remote_code=True  # Required for Maya1 custom architecture
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_path,
+                trust_remote_code=True  # Required for Maya1 custom tokenizer
+            )
+            print(f"[ENGINE] Maya1 loaded: {len(self.tokenizer)} tokens")
+
+            print("[ENGINE] Loading SNAC decoder...")
+            self.snac_model = SNAC.from_pretrained(SNAC_MODEL_ID).eval()
+            if self.device == "cuda":
+                self.snac_model = self.snac_model.to(self.device)
+            print("[ENGINE] SNAC decoder loaded")
+        except Exception as e:
+            # Clean up any partially loaded models
+            self.cleanup()
+            raise RuntimeError(f"Failed to load models: {e}") from e
+
+    def cleanup(self):
+        """Clean up GPU/CPU resources."""
+        try:
+            if hasattr(self, 'model') and self.model is not None:
+                del self.model
+                self.model = None
+                print("[ENGINE] Maya1 model released")
+
+            if hasattr(self, 'snac_model') and self.snac_model is not None:
+                del self.snac_model
+                self.snac_model = None
+                print("[ENGINE] SNAC model released")
+
+            if hasattr(self, 'tokenizer') and self.tokenizer is not None:
+                del self.tokenizer
+                self.tokenizer = None
+
+            # Force garbage collection and clear CUDA cache
+            import gc
+            gc.collect()
+            if self.device == "cuda":
+                torch.cuda.empty_cache()
+                print("[ENGINE] CUDA cache cleared")
+        except Exception as e:
+            print(f"[ENGINE] Warning: Cleanup failed: {e}")
     
     def build_prompt(self, description: str, text: str) -> str:
         """Build formatted prompt for Maya1 TTS."""
@@ -340,7 +375,8 @@ def chunk_text_for_quality(text: str, max_words: int = 40, min_words: int = 10) 
         try:
             doc = nlp(batch_text)
             all_sentences.extend([sent.text.strip() for sent in doc.sents if sent.text.strip()])
-        except:
+        except Exception as e:
+            print(f"[CHUNK] Warning: spaCy sentence parsing failed ({e}), falling back to simple split")
             all_sentences.extend([s.strip() + "." for s in batch_text.split('. ') if s.strip()])
     
     print(f"[CHUNK] Extracted {len(all_sentences)} sentences")
@@ -398,8 +434,8 @@ def parse_epub(epub_path: str) -> tuple:
         creators = book.get_metadata('DC', 'creator')
         if creators:
             author = creators[0][0]
-    except:
-        pass
+    except Exception as e:
+        print(f"[EPUB] Warning: Failed to extract metadata: {e}")
     
     print(f"[EPUB] Title: {title}")
     print(f"[EPUB] Author: {author}")
@@ -457,11 +493,17 @@ def export_m4b(wav_path: str, output_path: str, metadata: dict):
         "-ar", "24000",
     ]
     
+    # Import sanitization function from assembler
+    from assembler import sanitize_metadata
+
+    # Apply metadata (sanitized to prevent command injection)
     if metadata:
         if "title" in metadata:
-            cmd.extend(["-metadata", f"title={metadata['title']}"])
+            safe_title = sanitize_metadata(metadata['title'])
+            cmd.extend(["-metadata", f"title={safe_title}"])
         if "author" in metadata:
-            cmd.extend(["-metadata", f"artist={metadata['author']}"])
+            safe_author = sanitize_metadata(metadata['author'])
+            cmd.extend(["-metadata", f"artist={safe_author}"])
     
     cmd.append(output_path)
     
@@ -672,13 +714,13 @@ def convert_epub_to_audiobook(epub_path: str, output_dir: str = None, voice: str
     for f in audio_files:
         try:
             os.remove(f)
-        except:
-            pass
+        except OSError as e:
+            print(f"[CLEANUP] Warning: Failed to remove {f}: {e}")
     try:
         os.remove(combined_wav)
         os.rmdir(temp_dir)
-    except:
-        pass
+    except OSError as e:
+        print(f"[CLEANUP] Warning: Failed to remove temp files: {e}")
     
     # Final summary
     logger.info("=" * 70)

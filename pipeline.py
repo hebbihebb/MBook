@@ -32,7 +32,8 @@ class Maya1Pipeline:
                 self.is_text_model = 'Llama' in config.architectures[0] if config.architectures else False
                 if self.is_text_model:
                     print(f"Detected Text Model ({config.architectures}). Using gTTS fallback for Audio Generation.")
-            except:
+            except Exception as e:
+                print(f"Warning: Failed to detect model architecture ({e}), assuming non-text model")
                 self.is_text_model = False
 
             # Load weights to verify files are present (Requirement: "Confirm downloaded")

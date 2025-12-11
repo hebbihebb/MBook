@@ -1,7 +1,42 @@
 import os
+import re
 from pydub import AudioSegment
 import subprocess
 from typing import List, Dict, Optional
+
+
+def sanitize_metadata(value: str) -> str:
+    """
+    Sanitizes metadata values to prevent command injection in ffmpeg calls.
+
+    Removes or escapes characters that could be used for command injection:
+    - Newlines, carriage returns, tabs
+    - Shell metacharacters: ; | & $ ` \ " ' < >
+    - Control characters
+
+    Args:
+        value: The metadata value to sanitize
+
+    Returns:
+        Sanitized metadata value safe for ffmpeg
+    """
+    if not isinstance(value, str):
+        value = str(value)
+
+    # Remove control characters and newlines
+    value = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', value)
+
+    # Remove potentially dangerous shell metacharacters
+    dangerous_chars = [';', '|', '&', '$', '`', '\\', '"', "'", '<', '>', '\n', '\r', '\t']
+    for char in dangerous_chars:
+        value = value.replace(char, '')
+
+    # Limit length to prevent extremely long metadata
+    max_length = 500
+    if len(value) > max_length:
+        value = value[:max_length]
+
+    return value.strip()
 
 
 def stitch_audio(audio_chunks: List[str], output_path: str = "temp_book.wav") -> str:
@@ -179,13 +214,15 @@ def export_m4b(
     # Audio codec settings (standard audiobook settings)
     cmd.extend(["-c:a", "aac", "-b:a", "64k"])
     
-    # Book metadata
+    # Book metadata (sanitized to prevent command injection)
     if metadata:
         if "title" in metadata:
-            cmd.extend(["-metadata", f"title={metadata['title']}"])
+            safe_title = sanitize_metadata(metadata['title'])
+            cmd.extend(["-metadata", f"title={safe_title}"])
         if "author" in metadata:
-            cmd.extend(["-metadata", f"artist={metadata['author']}"])
-            cmd.extend(["-metadata", f"album_artist={metadata['author']}"])
+            safe_author = sanitize_metadata(metadata['author'])
+            cmd.extend(["-metadata", f"artist={safe_author}"])
+            cmd.extend(["-metadata", f"album_artist={safe_author}"])
         # Mark as audiobook
         cmd.extend(["-metadata", "genre=Audiobook"])
     

@@ -19,8 +19,8 @@ def download_hf_model():
         print(f"Downloading Tokenizer for {model_id}...")
         try:
             AutoTokenizer.from_pretrained(model_id)
-        except:
-             print("Tokenizer not found (might not use one), skipping.")
+        except Exception as e:
+             print(f"Tokenizer not found ({e}) - might not use one, skipping.")
 
         print(f"Downloading Model for {model_id}...")
         AutoModel.from_pretrained(model_id)

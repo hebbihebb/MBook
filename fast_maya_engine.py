@@ -123,40 +123,74 @@ class FastMaya1Engine:
         
         from lmdeploy import pipeline, TurbomindEngineConfig, GenerationConfig
         from snac import SNAC
-        
+
         print("[FastMaya] Loading lmdeploy pipeline...")
-        
-        # Configure backend
-        backend_config = TurbomindEngineConfig(
-            cache_max_entry_count=self.memory_util,
-            tp=self.tp,
-            enable_prefix_caching=self.enable_prefix_caching,
-            quant_policy=self.quant_policy
-        )
-        
-        # Load the pipeline
-        self.pipe = pipeline("maya-research/maya1", backend_config=backend_config)
-        print("[FastMaya] Pipeline loaded")
-        
-        # Load SNAC decoder
-        print("[FastMaya] Loading SNAC decoder...")
-        self.snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval().to("cuda")
-        print("[FastMaya] SNAC loaded")
-        
-        # Load upsampler if requested
-        if self.use_upsampler:
-            if is_fasr_available():
-                from FastAudioSR import FASR
-                from huggingface_hub import snapshot_download
-                
-                print("[FastMaya] Loading AudioSR upsampler...")
-                upsampler_path = snapshot_download("YatharthS/FlashSR")
-                self.upsampler = FASR(f"{upsampler_path}/upsampler.pth")
-                _ = self.upsampler.model.half()
-                print("[FastMaya] Upsampler loaded (48kHz output)")
-            else:
-                print("[FastMaya] Warning: FastAudioSR not installed. Using 24kHz output.")
-                self.use_upsampler = False
+
+        try:
+            # Configure backend
+            backend_config = TurbomindEngineConfig(
+                cache_max_entry_count=self.memory_util,
+                tp=self.tp,
+                enable_prefix_caching=self.enable_prefix_caching,
+                quant_policy=self.quant_policy
+            )
+
+            # Load the pipeline
+            # SECURITY WARNING: lmdeploy pipeline internally uses trust_remote_code=True
+            # for custom model architectures. Only use with trusted models.
+            self.pipe = pipeline("maya-research/maya1", backend_config=backend_config)
+            print("[FastMaya] Pipeline loaded")
+
+            # Load SNAC decoder
+            print("[FastMaya] Loading SNAC decoder...")
+            self.snac_model = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval().to("cuda")
+            print("[FastMaya] SNAC loaded")
+
+            # Load upsampler if requested
+            if self.use_upsampler:
+                if is_fasr_available():
+                    from FastAudioSR import FASR
+                    from huggingface_hub import snapshot_download
+
+                    print("[FastMaya] Loading AudioSR upsampler...")
+                    upsampler_path = snapshot_download("YatharthS/FlashSR")
+                    self.upsampler = FASR(f"{upsampler_path}/upsampler.pth")
+                    _ = self.upsampler.model.half()
+                    print("[FastMaya] Upsampler loaded (48kHz output)")
+                else:
+                    print("[FastMaya] Warning: FastAudioSR not installed. Using 24kHz output.")
+                    self.use_upsampler = False
+        except Exception as e:
+            # Clean up any partially loaded models
+            self.cleanup()
+            raise RuntimeError(f"Failed to load models: {e}") from e
+
+    def cleanup(self):
+        """Clean up GPU/CPU resources."""
+        import torch
+        try:
+            if hasattr(self, 'pipe') and self.pipe is not None:
+                del self.pipe
+                self.pipe = None
+                print("[FastMaya] Pipeline released")
+
+            if hasattr(self, 'snac_model') and self.snac_model is not None:
+                del self.snac_model
+                self.snac_model = None
+                print("[FastMaya] SNAC model released")
+
+            if hasattr(self, 'upsampler') and self.upsampler is not None:
+                del self.upsampler
+                self.upsampler = None
+                print("[FastMaya] Upsampler released")
+
+            # Force garbage collection and clear CUDA cache
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+            print("[FastMaya] CUDA cache cleared")
+        except Exception as e:
+            print(f"[FastMaya] Warning: Cleanup failed: {e}")
         
         # Generation config
         self.gen_config = GenerationConfig(
