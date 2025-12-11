@@ -2,8 +2,6 @@
 
 Convert EPUB files to high-quality M4B audiobooks using Maya1's native text-to-speech with SNAC neural codec.
 
-![MBook GUI](docs/images/gui_screenshot.png)
-
 ## Features
 
 - **Native Maya1 TTS** - Uses the 3B-parameter Maya1 model for natural speech synthesis
@@ -54,6 +52,8 @@ The Maya1 model (~6.6GB) will be downloaded automatically on first run.
 
 ### Electron Web UI (Recommended)
 
+![Electron Web UI](electron-webui.jpg)
+
 ```bash
 cd webview_ui
 npm start
@@ -70,6 +70,8 @@ The Electron web UI features a terminal-style interface with:
 - Live conversion statistics
 
 ### tkinter GUI (Alternative)
+
+![tkinter GUI](main-app.jpg)
 
 ```bash
 python main.py
