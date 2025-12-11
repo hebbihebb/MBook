@@ -27,6 +27,21 @@ import numpy as np
 import soundfile as sf
 from scipy.io import wavfile
 
+# Load spacy model once at module level for performance
+_SPACY_NLP = None
+
+def get_spacy_model():
+    """Get or load spacy model (singleton pattern)."""
+    global _SPACY_NLP
+    if _SPACY_NLP is None:
+        try:
+            import spacy
+            _SPACY_NLP = spacy.load("en_core_web_sm")
+        except Exception as e:
+            print(f"[CHUNK] Warning: Failed to load spacy model ({e}), will fall back to simple splitting")
+            _SPACY_NLP = False  # Mark as failed to avoid retrying
+    return _SPACY_NLP if _SPACY_NLP is not False else None
+
 # Maya1 Token Constants
 CODE_START_TOKEN_ID = 128257
 CODE_END_TOKEN_ID = 128258
@@ -325,22 +340,44 @@ def clean_text(text: str) -> str:
 def chunk_text_for_quality(text: str, max_words: int = 40, min_words: int = 10) -> list:
     """
     Chunk text into optimal sizes for high-quality TTS.
-    
+
     For best quality (similar to medium test), we want chunks around 40-60 words.
     This produces ~20-30 second audio segments which Maya1 handles well.
-    
+
     Handles very large texts by processing in batches.
     """
-    import spacy
-    
-    try:
-        nlp = spacy.load("en_core_web_sm")
-    except OSError:
-        print("[CHUNK] Downloading spacy model...")
-        from spacy.cli import download
-        download("en_core_web_sm")
-        nlp = spacy.load("en_core_web_sm")
-    
+
+    # Load spacy model (using singleton to avoid reloading)
+    nlp = get_spacy_model()
+
+    if nlp is None:
+        # Fallback to simple sentence splitting if spacy is not available
+        print("[CHUNK] Using simple sentence splitting (spacy not available)")
+        sentences = []
+        for sent in text.split('. '):
+            if sent.strip():
+                sentences.append(sent.strip() + ".")
+
+        # Chunk sentences by word count
+        chunks = []
+        current_chunk = []
+        current_words = 0
+
+        for sent in sentences:
+            word_count = len(sent.split())
+            if current_words + word_count > max_words and current_chunk:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = [sent]
+                current_words = word_count
+            else:
+                current_chunk.append(sent)
+                current_words += word_count
+
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+
+        return chunks
+
     # Increase max length for large texts
     nlp.max_length = 2000000
     

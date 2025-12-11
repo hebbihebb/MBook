@@ -170,9 +170,11 @@ def parse_epub_with_chapters(epub_path: str) -> ParsedEpub:
     
     # If no chapters found, treat entire book as one chapter
     if not chapters:
-        full_text = ""
+        # Use list join for O(n) performance instead of O(n²) string concatenation
+        text_parts = []
         for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
-            full_text += clean_html_text(item.get_content()) + "\n"
+            text_parts.append(clean_html_text(item.get_content()))
+        full_text = "\n".join(text_parts)
         
         if full_text.strip():
             chapters.append(Chapter(
