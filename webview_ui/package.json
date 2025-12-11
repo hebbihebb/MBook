@@ -4,7 +4,7 @@
   "description": "A web-based UI for the Maya1 Audiobook Generator",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "env -u ELECTRON_RUN_AS_NODE electron ."
   },
   "author": "",
   "license": "MIT",

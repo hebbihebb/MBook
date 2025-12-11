@@ -127,9 +127,9 @@
                     <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">EPUB_PATH</label>
                     <div class="flex">
                         <input class="block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none"
-                               id="epub-path" readonly="" type="text" value="Select a file..."/>
+                               id="epub-path" type="text" placeholder="Type path or click Browse..." title="Type file path and press Enter, or click Browse"/>
                         <button class="inline-flex items-center px-3 py-1 border border-l-0 border-border-dark bg-slate-700 text-slate-300 rounded-none hover:bg-slate-600 transition-colors text-xs uppercase"
-                                id="browse-epub" title="Browse (Alt+B)">
+                                id="browse-epub" title="Browse (Alt+B) - Opens dialog on server">
                             <span class="material-symbols-outlined text-sm mr-1">folder_open</span>
                             BRW
                         </button>
@@ -139,9 +139,9 @@
                     <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">OUTPUT_DIR</label>
                     <div class="flex">
                         <input class="block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none"
-                               id="output-dir" readonly="" type="text" value="Select a directory..."/>
+                               id="output-dir" type="text" placeholder="Type path or click Browse..." title="Type directory path and press Enter, or click Browse"/>
                         <button class="inline-flex items-center px-3 py-1 border border-l-0 border-border-dark bg-slate-700 text-slate-300 rounded-none hover:bg-slate-600 transition-colors text-xs uppercase"
-                                id="browse-output" title="Browse (Alt+O)">
+                                id="browse-output" title="Browse (Alt+O) - Opens dialog on server">
                             <span class="material-symbols-outlined text-sm mr-1">folder_open</span>
                             BRW
                         </button>
@@ -266,6 +266,6 @@
          id="console-output">
     </div>
 </footer>
-<script src="{{ url_for('static', filename='main.js') }}"></script>
+<script src="../static/main.js"></script>
 </body>
 </html>
