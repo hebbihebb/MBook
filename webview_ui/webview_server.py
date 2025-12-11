@@ -51,11 +51,22 @@ def index():
 
 @app.route("/api/select_epub", methods=["POST"])
 def select_epub():
-    """Open a file dialog to select an EPUB file."""
-    filepath = filedialog.askopenfilename(
-        title="Select EPUB File",
-        filetypes=(("EPUB files", "*.epub"), ("All files", "*.*")),
-    )
+    """Open a file dialog to select an EPUB file, or accept manual path for remote access."""
+    # Check if a manual filepath was provided in the request body
+    data = request.get_json() if request.is_json else {}
+    filepath = data.get("filepath") if data else None
+
+    # If no manual path provided, try to open file dialog (works locally only)
+    if not filepath:
+        try:
+            filepath = filedialog.askopenfilename(
+                title="Select EPUB File",
+                filetypes=(("EPUB files", "*.epub"), ("All files", "*.*")),
+            )
+        except Exception as e:
+            # File dialog failed (e.g., no display for remote access)
+            return jsonify({"error": "File dialog not available. Please provide filepath in request body: {\"filepath\": \"/path/to/file.epub\"}"}), 400
+
     if not filepath:
         return jsonify({"error": "No file selected."}), 400
 
@@ -87,8 +98,19 @@ def cover_image():
 
 @app.route("/api/select_output_dir", methods=["POST"])
 def select_output_dir():
-    """Open a directory dialog to select the output folder."""
-    directory = filedialog.askdirectory(title="Select Output Directory")
+    """Open a directory dialog to select the output folder, or accept manual path for remote access."""
+    # Check if a manual directory path was provided in the request body
+    data = request.get_json() if request.is_json else {}
+    directory = data.get("output_dir") if data else None
+
+    # If no manual path provided, try to open directory dialog (works locally only)
+    if not directory:
+        try:
+            directory = filedialog.askdirectory(title="Select Output Directory")
+        except Exception as e:
+            # File dialog failed (e.g., no display for remote access)
+            return jsonify({"error": "File dialog not available. Please provide output_dir in request body: {\"output_dir\": \"/path/to/output\"}"}), 400
+
     if not directory:
         return jsonify({"error": "No directory selected."}), 400
     return jsonify({"output_dir": directory})
@@ -282,4 +304,6 @@ def events():
     return response
 
 if __name__ == "__main__":
-    app.run(port=5000, threaded=True)  # Enable threading for concurrent requests
+    # Bind to 0.0.0.0 to allow remote connections for testing
+    # WARNING: Only use this on trusted networks! For production, use a proper WSGI server with authentication
+    app.run(host='0.0.0.0', port=5000, threaded=True)  # Enable threading for concurrent requests
