@@ -28,6 +28,7 @@ num2words
 
 # GUI (optional)
 ttkbootstrap
+Flask
 
 # Utilities
 numpy

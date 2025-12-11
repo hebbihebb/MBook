@@ -1,0 +1,15 @@
+{
+  "name": "mbook-maya1-audiobook-generator",
+  "version": "1.0.0",
+  "description": "A web-based UI for the Maya1 Audiobook Generator",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^39.2.6",
+    "python-shell": "^5.0.0"
+  }
+}
