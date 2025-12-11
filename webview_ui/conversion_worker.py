@@ -40,7 +40,8 @@ def run_conversion_job(
 
         # Import heavy modules here to not slow down startup
         from convert_epub_to_audiobook import Maya1TTSEngine, clean_text, chunk_text_for_quality, LOCAL_MODEL_DIR
-        from assembler import stitch_audio_with_chapter_tracking, generate_chapter_metadata, export_m4b, create_audiobookshelf_folder, get_cover_extension
+        from assembler import stitch_audio_with_chapter_tracking, generate_chapter_metadata, export_m4b, create_audiobookshelf_folder
+        from epub_parser import get_cover_extension
         import soundfile as sf
         import torch
 
