@@ -74,3 +74,5 @@ reference_audio/
 # Screenshots in root (keep docs/images/)
 Screenshot_*.png
 
+# Node
+webview_ui/node_modules/

@@ -11,6 +11,9 @@ from bs4 import BeautifulSoup
 from dataclasses import dataclass, field
 from typing import List, Optional
 import re
+import os
+import tempfile
+from pathlib import Path
 
 
 @dataclass
@@ -19,9 +22,9 @@ class Chapter:
     title: str
     content: str
     order: int
-    
 
-@dataclass 
+
+@dataclass
 class ParsedEpub:
     """Complete parsed EPUB with metadata and chapters."""
     title: str
@@ -29,6 +32,33 @@ class ParsedEpub:
     chapters: List[Chapter]
     cover_image: Optional[bytes] = None
     cover_media_type: Optional[str] = None
+
+
+class EpubParser:
+    def __init__(self, epub_path: str):
+        self.epub_path = epub_path
+        self.parsed_epub = parse_epub_with_chapters(epub_path)
+        self.cover_image_path = None
+
+    def get_book_title(self) -> str:
+        return self.parsed_epub.title
+
+    def get_book_author(self) -> str:
+        return self.parsed_epub.author
+
+    def get_chapters(self) -> List[Chapter]:
+        return self.parsed_epub.chapters
+
+    def get_cover_image_path(self) -> Optional[str]:
+        if self.parsed_epub.cover_image and not self.cover_image_path:
+            # Save the cover image to a temporary file
+            ext = get_cover_extension(self.parsed_epub.cover_media_type)
+            cover_filename = f"cover{ext}"
+            cover_path = Path(tempfile.gettempdir()) / cover_filename
+            with open(cover_path, "wb") as f:
+                f.write(self.parsed_epub.cover_image)
+            self.cover_image_path = str(cover_path)
+        return self.cover_image_path
 
 
 def clean_html_text(html_content: bytes) -> str:
