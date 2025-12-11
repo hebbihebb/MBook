@@ -19,6 +19,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const bookStatus = document.getElementById("book-status");
 
     let chapters = [];
+    let pollInterval = null;
+    let displayedLogs = new Set();
 
     const logToConsole = (message, level = "info") => {
         const timestamp = new Date().toLocaleTimeString();
@@ -109,6 +111,59 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll(".chapter-checkbox").forEach(cb => cb.checked = e.target.checked);
     });
 
+    async function startPolling() {
+        if (pollInterval) clearInterval(pollInterval);
+
+        pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                // Update progress display
+                if (data.progress !== undefined) {
+                    bookStatus.textContent = `GENERATING (${Math.round(data.progress)}%)`;
+                }
+
+                // Display new logs
+                if (data.logs) {
+                    data.logs.forEach(log => {
+                        if (!displayedLogs.has(log.timestamp)) {
+                            logToConsole(log.message, log.level);
+                            displayedLogs.add(log.timestamp);
+                        }
+                    });
+                }
+
+                // Handle completion/error
+                if (data.status === "completed") {
+                    logToConsole(`Completed! Output: ${data.final_path}`, "success");
+                    bookStatus.textContent = "COMPLETED";
+                    bookStatus.className = "text-console-success font-medium";
+                    stopPolling();
+                } else if (data.status === "error") {
+                    logToConsole(`Error: ${data.error}`, "error");
+                    bookStatus.textContent = "ERROR";
+                    bookStatus.className = "text-console-error font-medium";
+                    stopPolling();
+                } else if (data.status === "cancelled") {
+                    logToConsole("Conversion cancelled", "warning");
+                    bookStatus.textContent = "CANCELLED";
+                    bookStatus.className = "text-console-warning font-medium";
+                    stopPolling();
+                }
+            } catch (error) {
+                console.error("Polling error:", error);
+            }
+        }, 1000); // Poll every 1 second
+    }
+
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+    }
+
     generateBtn.addEventListener("click", async () => {
         const selectedChapters = [];
         document.querySelectorAll(".chapter-checkbox:checked").forEach(cb => {
@@ -120,22 +175,41 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        if (!outputDirInput.value) {
+            logToConsole("Please select an output directory first.", "warning");
+            return;
+        }
+
         logToConsole(`Starting generation of ${selectedChapters.length} chapters...`, "info");
+        bookStatus.textContent = "STARTING...";
+        bookStatus.className = "text-console-info font-medium";
+
+        // Clear previous logs
+        displayedLogs.clear();
 
         try {
             const response = await fetch("/api/generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chapters: selectedChapters }),
+                body: JSON.stringify({
+                    chapters: selectedChapters,
+                    output_dir: outputDirInput.value,
+                    voice_prompt: "Male narrator voice in his 40s with an American accent. Warm baritone, calm pacing, clear diction."
+                }),
             });
             const data = await response.json();
-            if (data.status === "success") {
-                logToConsole(data.message, "success");
-            } else {
+            if (data.status === "started") {
+                logToConsole("Conversion started successfully", "success");
+                startPolling();
+            } else if (data.error) {
                 logToConsole(`Error: ${data.error}`, "error");
+                bookStatus.textContent = "ERROR";
+                bookStatus.className = "text-console-error font-medium";
             }
         } catch (error) {
-            logToConsole(`Generation failed: ${error}`, "error");
+            logToConsole(`Failed to start: ${error}`, "error");
+            bookStatus.textContent = "ERROR";
+            bookStatus.className = "text-console-error font-medium";
         }
     });
 
