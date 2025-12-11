@@ -123,6 +123,7 @@ class FastMaya1Engine:
         
         from lmdeploy import pipeline, TurbomindEngineConfig, GenerationConfig
         from snac import SNAC
+        import warnings
 
         print("[FastMaya] Loading lmdeploy pipeline...")
 
@@ -138,6 +139,13 @@ class FastMaya1Engine:
             # Load the pipeline
             # SECURITY WARNING: lmdeploy pipeline internally uses trust_remote_code=True
             # for custom model architectures. Only use with trusted models.
+            warnings.warn(
+                "Loading model with lmdeploy pipeline which internally uses trust_remote_code=True. "
+                "This allows arbitrary code execution from the model repository. "
+                "Only use with trusted sources like maya-research/maya1.",
+                RuntimeWarning,
+                stacklevel=2
+            )
             self.pipe = pipeline("maya-research/maya1", backend_config=backend_config)
             print("[FastMaya] Pipeline loaded")
 
@@ -168,29 +176,39 @@ class FastMaya1Engine:
     def cleanup(self):
         """Clean up GPU/CPU resources."""
         import torch
-        try:
-            if hasattr(self, 'pipe') and self.pipe is not None:
+        # Clean each resource independently to prevent one failure from blocking others
+        if hasattr(self, 'pipe') and self.pipe is not None:
+            try:
                 del self.pipe
                 self.pipe = None
                 print("[FastMaya] Pipeline released")
+            except Exception as e:
+                print(f"[FastMaya] Warning: Failed to release pipeline: {e}")
 
-            if hasattr(self, 'snac_model') and self.snac_model is not None:
+        if hasattr(self, 'snac_model') and self.snac_model is not None:
+            try:
                 del self.snac_model
                 self.snac_model = None
                 print("[FastMaya] SNAC model released")
+            except Exception as e:
+                print(f"[FastMaya] Warning: Failed to release SNAC model: {e}")
 
-            if hasattr(self, 'upsampler') and self.upsampler is not None:
+        if hasattr(self, 'upsampler') and self.upsampler is not None:
+            try:
                 del self.upsampler
                 self.upsampler = None
                 print("[FastMaya] Upsampler released")
+            except Exception as e:
+                print(f"[FastMaya] Warning: Failed to release upsampler: {e}")
 
-            # Force garbage collection and clear CUDA cache
+        # Always attempt cleanup, regardless of failures above
+        try:
             import gc
             gc.collect()
             torch.cuda.empty_cache()
             print("[FastMaya] CUDA cache cleared")
         except Exception as e:
-            print(f"[FastMaya] Warning: Cleanup failed: {e}")
+            print(f"[FastMaya] Warning: Failed to clear CUDA cache: {e}")
         
         # Generation config
         self.gen_config = GenerationConfig(
@@ -291,17 +309,23 @@ class FastMaya1Engine:
     ) -> np.ndarray:
         """
         Generate audio for a single text chunk.
-        
+
         This method provides interface compatibility with Maya1TTSEngine.
-        
+
         Args:
             text: Text to synthesize
             voice_description: Voice description for the narrator
             max_duration_sec: Maximum duration (used to set max_new_tokens)
-            
+
         Returns:
             Audio waveform as numpy array
         """
+        # Validate voice_description
+        if not voice_description or not voice_description.strip():
+            raise ValueError("voice_description cannot be empty")
+        if len(voice_description) > 1000:
+            raise ValueError(f"voice_description too long ({len(voice_description)} chars, max 1000)")
+
         if not self._loaded:
             self.load()
         

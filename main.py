@@ -726,10 +726,10 @@ class AudiobookApp(ttk.Window):
             # Validate batch size
             if batch_size < 1:
                 raise ValueError(f"Batch size must be at least 1, got: {batch_size}")
+            if batch_size > 64:
+                raise ValueError(f"Batch size too large (max 64), got: {batch_size}")
             if batch_size > 32:
                 self.log(f"Warning: Large batch size ({batch_size}) may cause memory issues")
-                if batch_size > 64:
-                    raise ValueError(f"Batch size too large (max 64), got: {batch_size}")
             
             if use_batch:
                 self.log("Using FastMaya batch engine...")

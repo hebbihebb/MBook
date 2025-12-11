@@ -118,6 +118,8 @@ class Maya1TTSEngine:
     
     def load(self):
         """Load all models."""
+        import warnings
+
         print("[ENGINE] Loading Maya1 model...")
 
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -128,6 +130,13 @@ class Maya1TTSEngine:
             # from HuggingFace Hub. Only use with trusted models like maya-research/maya1.
             # If the model repository is compromised, malicious code could execute.
             # For production use, consider downloading models locally and auditing code.
+            warnings.warn(
+                "Loading model with trust_remote_code=True. This allows arbitrary code "
+                "execution from the model repository. Only use with trusted sources like "
+                "maya-research/maya1.",
+                RuntimeWarning,
+                stacklevel=2
+            )
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_path,
                 torch_dtype=torch.bfloat16,
@@ -152,29 +161,39 @@ class Maya1TTSEngine:
 
     def cleanup(self):
         """Clean up GPU/CPU resources."""
-        try:
-            if hasattr(self, 'model') and self.model is not None:
+        # Clean each resource independently to prevent one failure from blocking others
+        if hasattr(self, 'model') and self.model is not None:
+            try:
                 del self.model
                 self.model = None
                 print("[ENGINE] Maya1 model released")
+            except Exception as e:
+                print(f"[ENGINE] Warning: Failed to release model: {e}")
 
-            if hasattr(self, 'snac_model') and self.snac_model is not None:
+        if hasattr(self, 'snac_model') and self.snac_model is not None:
+            try:
                 del self.snac_model
                 self.snac_model = None
                 print("[ENGINE] SNAC model released")
+            except Exception as e:
+                print(f"[ENGINE] Warning: Failed to release SNAC model: {e}")
 
-            if hasattr(self, 'tokenizer') and self.tokenizer is not None:
+        if hasattr(self, 'tokenizer') and self.tokenizer is not None:
+            try:
                 del self.tokenizer
                 self.tokenizer = None
+            except Exception as e:
+                print(f"[ENGINE] Warning: Failed to release tokenizer: {e}")
 
-            # Force garbage collection and clear CUDA cache
+        # Always attempt cleanup, regardless of failures above
+        try:
             import gc
             gc.collect()
             if self.device == "cuda":
                 torch.cuda.empty_cache()
                 print("[ENGINE] CUDA cache cleared")
         except Exception as e:
-            print(f"[ENGINE] Warning: Cleanup failed: {e}")
+            print(f"[ENGINE] Warning: Failed to clear CUDA cache: {e}")
     
     def build_prompt(self, description: str, text: str) -> str:
         """Build formatted prompt for Maya1 TTS."""
@@ -196,6 +215,12 @@ class Maya1TTSEngine:
     
     def generate_audio(self, text: str, voice_description: str, max_duration_sec: float = 30.0) -> np.ndarray:
         """Generate audio for a text chunk."""
+        # Validate voice_description
+        if not voice_description or not voice_description.strip():
+            raise ValueError("voice_description cannot be empty")
+        if len(voice_description) > 1000:
+            raise ValueError(f"voice_description too long ({len(voice_description)} chars, max 1000)")
+
         prompt = self.build_prompt(voice_description, text)
         
         inputs = self.tokenizer(prompt, return_tensors="pt")
@@ -522,6 +547,12 @@ def stitch_audio_files(audio_files: list, output_path: str, silence_ms: int = 40
 
 def export_m4b(wav_path: str, output_path: str, metadata: dict):
     """Convert WAV to M4B using ffmpeg."""
+    # Import from assembler
+    from assembler import sanitize_metadata, check_ffmpeg_available
+
+    # Check ffmpeg availability before proceeding
+    check_ffmpeg_available()
+
     cmd = [
         "ffmpeg", "-y",
         "-i", wav_path,
@@ -529,9 +560,6 @@ def export_m4b(wav_path: str, output_path: str, metadata: dict):
         "-b:a", "128k",  # Higher bitrate for better quality
         "-ar", "24000",
     ]
-    
-    # Import sanitization function from assembler
-    from assembler import sanitize_metadata
 
     # Apply metadata (sanitized to prevent command injection)
     if metadata:

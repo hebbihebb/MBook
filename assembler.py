@@ -1,8 +1,26 @@
 import os
 import re
+import shutil
 from pydub import AudioSegment
 import subprocess
 from typing import List, Dict, Optional
+
+
+def check_ffmpeg_available():
+    """
+    Check if ffmpeg is installed and available in PATH.
+
+    Raises:
+        RuntimeError: If ffmpeg is not found
+    """
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError(
+            "ffmpeg is not installed or not in PATH.\n"
+            "Please install ffmpeg from: https://ffmpeg.org/download.html\n"
+            "On Ubuntu/Debian: sudo apt-get install ffmpeg\n"
+            "On macOS: brew install ffmpeg\n"
+            "On Windows: Download from https://ffmpeg.org/download.html"
+        )
 
 
 def sanitize_metadata(value: str) -> str:
@@ -23,13 +41,9 @@ def sanitize_metadata(value: str) -> str:
     if not isinstance(value, str):
         value = str(value)
 
-    # Remove control characters and newlines
-    value = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', value)
-
-    # Remove potentially dangerous shell metacharacters
-    dangerous_chars = [';', '|', '&', '$', '`', '\\', '"', "'", '<', '>', '\n', '\r', '\t']
-    for char in dangerous_chars:
-        value = value.replace(char, '')
+    # Remove control characters (0x00-0x1f, 0x7f-0x9f) and shell metacharacters
+    # Single regex pass for O(n) performance instead of O(n*m) loop
+    value = re.sub(r'[\x00-\x1f\x7f-\x9f;|&$`\\"\'<>]', '', value)
 
     # Limit length to prevent extremely long metadata
     max_length = 500
@@ -175,17 +189,20 @@ def export_m4b(
 ) -> str:
     """
     Converts WAV to M4B with metadata and chapter markers using ffmpeg.
-    
+
     Args:
         wav_path: Path to input WAV file.
         output_m4b_path: Path for output M4B file.
         metadata: Dict with 'title', 'author'.
         cover_art_path: Optional path to cover image.
         chapters_file: Optional path to FFMETADATA chapters file.
-        
+
     Returns:
         Path to the M4B file.
     """
+    # Check ffmpeg availability before proceeding
+    check_ffmpeg_available()
+
     cmd = ["ffmpeg", "-y"]
     
     # Input files
