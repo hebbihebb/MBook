@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const pauseBtn = document.getElementById("pause-btn");
     const cancelBtn = document.getElementById("cancel-btn");
     const consoleOutput = document.getElementById("console-output");
+    const voiceSelect = document.querySelector(".terminal-select");
 
     const bookTitleInfo = document.getElementById("book-title-info");
     const bookCoverText = document.getElementById("book-cover-text");
@@ -21,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const bookStatus = document.getElementById("book-status");
 
     let chapters = [];
-    let pollInterval = null;
+    let eventSource = null;
     let displayedLogs = new Set();
     let isPaused = false;
 
@@ -37,6 +38,24 @@ document.addEventListener("DOMContentLoaded", () => {
         consoleOutput.innerHTML += `<div>[${timestamp}] <span class="${color}">${level.toUpperCase()}:</span> ${message}</div>`;
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     };
+
+    // Load voice presets on page load
+    async function loadVoicePresets() {
+        try {
+            const response = await fetch('/api/voice_presets');
+            const data = await response.json();
+
+            voiceSelect.innerHTML = '';
+            data.presets.forEach(preset => {
+                const option = document.createElement('option');
+                option.value = preset.prompt;
+                option.textContent = preset.label;
+                voiceSelect.appendChild(option);
+            });
+        } catch (error) {
+            logToConsole(`Failed to load voice presets: ${error}`, "error");
+        }
+    }
 
     browseEpubBtn.addEventListener("click", async () => {
         try {
@@ -114,14 +133,17 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll(".chapter-checkbox").forEach(cb => cb.checked = e.target.checked);
     });
 
-    async function startPolling() {
-        if (pollInterval) clearInterval(pollInterval);
+    function startEventStream() {
+        if (eventSource) {
+            eventSource.close();
+        }
 
-        pollInterval = setInterval(async () => {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
+        eventSource = new EventSource('/api/events');
 
+        eventSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+
+            if (data.event === "progress") {
                 // Update progress display
                 if (data.progress !== undefined && data.status === "running") {
                     bookStatus.textContent = `GENERATING (${Math.round(data.progress)}%)`;
@@ -137,44 +159,40 @@ document.addEventListener("DOMContentLoaded", () => {
                     isPaused = false;
                     pauseBtn.innerHTML = '<span class="material-symbols-outlined text-sm">pause</span> PAU';
                 }
-
-                // Display new logs
-                if (data.logs) {
-                    data.logs.forEach(log => {
-                        if (!displayedLogs.has(log.timestamp)) {
-                            logToConsole(log.message, log.level);
-                            displayedLogs.add(log.timestamp);
-                        }
-                    });
+            } else if (data.event === "log") {
+                // Display new log
+                if (!displayedLogs.has(data.timestamp)) {
+                    logToConsole(data.message, data.level);
+                    displayedLogs.add(data.timestamp);
                 }
-
-                // Handle completion/error
-                if (data.status === "completed") {
-                    logToConsole(`Completed! Output: ${data.final_path}`, "success");
-                    bookStatus.textContent = "COMPLETED";
-                    bookStatus.className = "text-console-success font-medium";
-                    stopPolling();
-                } else if (data.status === "error") {
-                    logToConsole(`Error: ${data.error}`, "error");
-                    bookStatus.textContent = "ERROR";
-                    bookStatus.className = "text-console-error font-medium";
-                    stopPolling();
-                } else if (data.status === "cancelled") {
-                    logToConsole("Conversion cancelled", "warning");
-                    bookStatus.textContent = "CANCELLED";
-                    bookStatus.className = "text-console-warning font-medium";
-                    stopPolling();
-                }
-            } catch (error) {
-                console.error("Polling error:", error);
+            } else if (data.event === "completed") {
+                logToConsole(`Completed! Output: ${data.final_path}`, "success");
+                bookStatus.textContent = "COMPLETED";
+                bookStatus.className = "text-console-success font-medium";
+                stopEventStream();
+            } else if (data.event === "error") {
+                logToConsole(`Error: ${data.error}`, "error");
+                bookStatus.textContent = "ERROR";
+                bookStatus.className = "text-console-error font-medium";
+                stopEventStream();
+            } else if (data.event === "cancelled") {
+                logToConsole("Conversion cancelled", "warning");
+                bookStatus.textContent = "CANCELLED";
+                bookStatus.className = "text-console-warning font-medium";
+                stopEventStream();
             }
-        }, 1000); // Poll every 1 second
+        };
+
+        eventSource.onerror = (error) => {
+            console.error("SSE error:", error);
+            stopEventStream();
+        };
     }
 
-    function stopPolling() {
-        if (pollInterval) {
-            clearInterval(pollInterval);
-            pollInterval = null;
+    function stopEventStream() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
         }
     }
 
@@ -205,6 +223,9 @@ document.addEventListener("DOMContentLoaded", () => {
         isPaused = false;
         pauseBtn.innerHTML = '<span class="material-symbols-outlined text-sm">pause</span> PAU';
 
+        // Get selected voice prompt
+        const voicePrompt = voiceSelect.value;
+
         try {
             const response = await fetch("/api/generate", {
                 method: "POST",
@@ -212,13 +233,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({
                     chapters: selectedChapters,
                     output_dir: outputDirInput.value,
-                    voice_prompt: "Male narrator voice in his 40s with an American accent. Warm baritone, calm pacing, clear diction."
+                    voice_prompt: voicePrompt
                 }),
             });
             const data = await response.json();
             if (data.status === "started") {
                 logToConsole("Conversion started successfully", "success");
-                startPolling();
+                startEventStream();
             } else if (data.error) {
                 logToConsole(`Error: ${data.error}`, "error");
                 bookStatus.textContent = "ERROR";
@@ -277,6 +298,9 @@ document.addEventListener("DOMContentLoaded", () => {
             logToConsole(`Failed to cancel: ${error}`, "error");
         }
     });
+
+    // Load voice presets on startup
+    loadVoicePresets();
 
     logToConsole("System initialized. Ready for command...", "info");
 });
