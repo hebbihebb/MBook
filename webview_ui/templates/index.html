@@ -1,271 +1,297 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Maya1 Audiobook Generator // TERMINAL MODE</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect"/>
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
     <script>
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            colors: {
-              primary: "#10b981", // Emerald-500 for terminal feel
-              "primary-hover": "#059669", // Emerald-600
-              "background-dark": "#0a0a0a", // Near black
-              "surface-dark": "#1a1a1a", // Darker gray for surfaces
-              "border-dark": "#333333", // Dark border
-              "console-text": "#f0f0f0", // Light gray for text
-              "console-prompt": "#10b981", // Emerald for prompt
-              "console-info": "#60a5fa", // Blue for info
-              "console-success": "#34d399", // Green for success
-              "console-warning": "#fbbf24", // Yellow for warning
-              "console-error": "#ef4444", // Red for error
-              "chapter-hover": "#2a2a2a", // Darker on hover
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#10b981", // Emerald-500 for terminal feel
+                        "primary-hover": "#059669", // Emerald-600
+                        "background-dark": "#0a0a0a", // Near black
+                        "surface-dark": "#1a1a1a", // Darker gray for surfaces
+                        "border-dark": "#333333", // Dark border
+                        "console-text": "#f0f0f0", // Light gray for text
+                        "console-prompt": "#10b981", // Emerald for prompt
+                        "console-info": "#60a5fa", // Blue for info
+                        "console-success": "#34d399", // Green for success
+                        "console-warning": "#fbbf24", // Yellow for warning
+                        "console-error": "#ef4444", // Red for error
+                        "chapter-hover": "#2a2a2a", // Darker on hover
+                    },
+                    fontFamily: {
+                        mono: ["Roboto Mono", "monospace"], // Monospace everywhere
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem", // Sharper corners
+                    },
+                },
             },
-            fontFamily: {
-              mono: ["Roboto Mono", "monospace"], // Monospace everywhere
-            },
-            borderRadius: {
-              DEFAULT: "0.25rem", // Sharper corners
-            },
-          },
-        },
-      };
+        };
     </script>
-    <style>::-webkit-scrollbar {
-        width: 8px;
-        height: 8px
-    }
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px
+        }
 
-    ::-webkit-scrollbar-track {
-        background: transparent
-    }
+        ::-webkit-scrollbar-track {
+            background: transparent
+        }
 
-    ::-webkit-scrollbar-thumb {
-        background: #444;
-        border-radius: 4px
-    }
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px
+        }
 
-    input[type="checkbox"] {
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        appearance: none;
-        display: inline-block;
-        width: 1rem;
-        height: 1rem;
-        border: 1px solid #666;
-        background-color: transparent;
-        border-radius: 0.125rem;
-        cursor: pointer;
-        vertical-align: middle;
-        position: relative;
-        outline: none
-    }
+        input[type="checkbox"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 1px solid #666;
+            background-color: transparent;
+            border-radius: 0;
+            cursor: pointer;
+            vertical-align: middle;
+            position: relative;
+            outline: none
+        }
 
-    input[type="checkbox"]:checked {
-        background-color: #10b981;
-        border-color: #10b981
-    }
+        input[type="checkbox"]:checked {
+            background-color: #10b981;
+            border-color: #10b981
+        }
 
-    input[type="checkbox"]:checked::after {
-        content: "✓";
-        display: block;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 0.75rem;
-        color: #0a0a0a;
-        line-height: 1
-    }
+        input[type="checkbox"]:checked::after {
+            content: "✓";
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.75rem;
+            color: #0a0a0a;
+            line-height: 1
+        }
 
-    input[type="checkbox"]:focus {
-        ring: 1px;
-        ring-color: #10b981;
-        border-color: #10b981
-    }
+        input[type="checkbox"]:focus {
+            outline: none;
+            box-shadow: 0 0 0 1px #10b981;
+            border-color: #10b981
+        }
 
-    .terminal-select {
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        appearance: none;
-        background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuBjOT4nIkOwOMpnI5r-E-WoZ-MpiFxNhsMQa6xl2Qk0jX2LjxD2a0Qyvdfiy-l8QAhuP35q4ndIUzpHQLPwcVdUjU6csyxCjts3MhJOA-iuUovoZ6fYKFn9X2OcjZvnA33yCr1dkb4rDy3FQh7MNtduNJoFMSF3oLmE8qUxHDP0ELYm9olEPs0subp3762pY97cID98Onr5VGGCfN0x-nodwLGjyROQz-32e6wzMxv8M9-NzbyoPlznwlexdU2fJDElTR8XhKQ39vQ);
-        background-repeat: no-repeat;
-        background-position: right 0.5rem center;
-        background-size: 1.25em 1.25em;
-        padding-right: 2rem
-    }
+        .terminal-select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuBjOT4nIkOwOMpnI5r-E-WoZ-MpiFxNhsMQa6xl2Qk0jX2LjxD2a0Qyvdfiy-l8QAhuP35q4ndIUzpHQLPwcVdUjU6csyxCjts3MhJOA-iuUovoZ6fYKFn9X2OcjZvnA33yCr1dkb4rDy3FQh7MNtduNJoFMSF3oLmE8qUxHDP0ELYm9olEPs0subp3762pY97cID98Onr5VGGCfN0x-nodwLGjyROQz-32e6wzMxv8M9-NzbyoPlznwlexdU2fJDElTR8XhKQ39vQ);
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+            background-size: 1.25em 1.25em;
+            padding-right: 2rem
+        }
 
-    .material-symbols-outlined {
-        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24
-    }</style>
+        .material-symbols-outlined {
+            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24
+        }
+    </style>
 </head>
+
 <body class="bg-background-dark text-console-text font-mono h-screen flex flex-col overflow-hidden">
-<header class="bg-surface-dark border-b border-border-dark py-3 px-4 flex items-center justify-between shrink-0 z-10">
-    <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary text-xl">terminal</span>
-        <h1 class="text-base font-bold tracking-tight text-primary">MAYA1.DEV // A-BOOK GEN v2.1</h1>
-        <span class="text-xs text-slate-500">_</span>
-    </div>
-    <div class="flex items-center gap-2">
-        <button class="p-1 rounded hover:bg-slate-700 text-slate-400 transition-colors" title="Settings">
-            <span class="material-symbols-outlined text-sm">settings</span>
-        </button>
-    </div>
-</header>
-<main class="flex-1 flex overflow-hidden">
-    <div class="flex-1 flex flex-col border-r border-border-dark min-w-0">
-        <div class="p-4 pb-2 space-y-3 shrink-0">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div class="space-y-1">
-                    <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">EPUB_PATH</label>
-                    <div class="flex">
-                        <input class="block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none"
-                               id="epub-path" type="text" placeholder="Type path or click Browse..." title="Type file path and press Enter, or click Browse"/>
-                        <button class="inline-flex items-center px-3 py-1 border border-l-0 border-border-dark bg-slate-700 text-slate-300 rounded-none hover:bg-slate-600 transition-colors text-xs uppercase"
+    <header
+        class="bg-surface-dark border-b border-border-dark py-3 px-4 flex items-center justify-between shrink-0 z-10">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-xl">terminal</span>
+            <h1 class="text-base font-bold tracking-tight text-primary">MAYA1.DEV // A-BOOK GEN v2.1</h1>
+            <span class="text-xs text-slate-500">_</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button class="p-1 rounded-none hover:bg-slate-700 text-slate-400 transition-colors" title="Settings">
+                <span class="material-symbols-outlined text-sm">settings</span>
+            </button>
+        </div>
+    </header>
+    <main class="flex-1 flex overflow-hidden">
+        <div class="flex-1 flex flex-col border-r border-border-dark min-w-0">
+            <div class="p-4 pb-2 space-y-3 shrink-0">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="space-y-1">
+                        <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">EPUB_PATH</label>
+                        <div class="flex">
+                            <input
+                                class="block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none"
+                                id="epub-path" type="text" placeholder="Type path or click Browse..."
+                                title="Type file path and press Enter, or click Browse" />
+                            <button
+                                class="inline-flex items-center px-3 py-1 border border-l-0 border-border-dark bg-slate-700 text-slate-300 rounded-none hover:bg-slate-600 transition-colors text-xs uppercase"
                                 id="browse-epub" title="Browse (Alt+B) - Opens dialog on server">
-                            <span class="material-symbols-outlined text-sm mr-1">folder_open</span>
-                            BRW
-                        </button>
+                                <span class="material-symbols-outlined text-sm mr-1">folder_open</span>
+                                BRW
+                            </button>
+                        </div>
                     </div>
-                </div>
-                <div class="space-y-1">
-                    <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">OUTPUT_DIR</label>
-                    <div class="flex">
-                        <input class="block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none"
-                               id="output-dir" type="text" placeholder="Type path or click Browse..." title="Type directory path and press Enter, or click Browse"/>
-                        <button class="inline-flex items-center px-3 py-1 border border-l-0 border-border-dark bg-slate-700 text-slate-300 rounded-none hover:bg-slate-600 transition-colors text-xs uppercase"
+                    <div class="space-y-1">
+                        <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">OUTPUT_DIR</label>
+                        <div class="flex">
+                            <input
+                                class="block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none"
+                                id="output-dir" type="text" placeholder="Type path or click Browse..."
+                                title="Type directory path and press Enter, or click Browse" />
+                            <button
+                                class="inline-flex items-center px-3 py-1 border border-l-0 border-border-dark bg-slate-700 text-slate-300 rounded-none hover:bg-slate-600 transition-colors text-xs uppercase"
                                 id="browse-output" title="Browse (Alt+O) - Opens dialog on server">
-                            <span class="material-symbols-outlined text-sm mr-1">folder_open</span>
-                            BRW
-                        </button>
+                                <span class="material-symbols-outlined text-sm mr-1">folder_open</span>
+                                BRW
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="px-4 py-2 flex items-center justify-between border-b border-border-dark bg-surface-dark/50 mt-2">
-            <h2 class="font-semibold text-primary flex items-center gap-2 text-sm uppercase">
-                <span class="material-symbols-outlined text-base">format_list_bulleted</span>
-                CHAPTERS (<span class="text-slate-400" id="chapter-count">0</span>)
-            </h2>
-            <div class="flex gap-2 text-xs">
-                <button class="text-primary hover:text-primary-hover px-1 py-0.5 rounded hover:bg-primary/10 transition-colors uppercase"
+            <div
+                class="px-4 py-2 flex items-center justify-between border-b border-border-dark bg-surface-dark/50 mt-2">
+                <h2 class="font-semibold text-primary flex items-center gap-2 text-sm uppercase">
+                    <span class="material-symbols-outlined text-base">format_list_bulleted</span>
+                    CHAPTERS (<span class="text-slate-400" id="chapter-count">0</span>)
+                </h2>
+                <div class="flex gap-2 text-xs">
+                    <button
+                        class="text-primary hover:text-primary-hover px-1 py-0.5 rounded-none hover:bg-primary/10 transition-colors uppercase"
                         id="select-all" title="Select All (Ctrl+A)">SEL ALL
-                </button>
-                <button class="text-slate-400 hover:text-slate-200 px-1 py-0.5 rounded hover:bg-slate-700 transition-colors uppercase"
+                    </button>
+                    <button
+                        class="text-slate-400 hover:text-slate-200 px-1 py-0.5 rounded-none hover:bg-slate-700 transition-colors uppercase"
                         id="clear-all" title="Clear All (Ctrl+D)">CLR ALL
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto px-4 py-2 relative">
+                <input
+                    class="sticky top-0 z-20 w-full bg-surface-dark border-b border-border-dark py-1 px-2 text-sm text-console-text placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary mb-2 rounded-none"
+                    placeholder="FILTER / SELECT (Ctrl+F)" type="text" />
+                <table class="w-full text-left text-sm text-slate-400">
+                    <thead class="text-xs text-slate-500 uppercase bg-background-dark sticky top-8 z-10">
+                        <tr>
+                            <th class="py-2 px-1 w-8 text-center" scope="col">
+                                <input class="rounded-none border-slate-600" id="select-all-checkbox" type="checkbox" />
+                            </th>
+                            <th class="py-2 px-1" scope="col">TITLE</th>
+                            <th class="py-2 px-1 text-right" scope="col">SIZE</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border-dark" id="chapter-table">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="w-96 flex flex-col bg-surface-dark border-l border-border-dark overflow-y-auto shrink-0 z-20">
+            <div class="p-4 border-b border-border-dark">
+                <h3 class="text-sm uppercase tracking-wide text-slate-500 mb-3 text-primary">BOOK INFO //
+                    <span id="book-title-info">...</span>
+                </h3>
+                <div class="flex gap-3">
+                    <div
+                        class="w-20 h-28 shrink-0 border border-slate-700 overflow-hidden bg-slate-900 aspect-[2/3] relative">
+                        <div class="absolute inset-0 bg-gradient-to-br from-indigo-700 to-purple-800 flex items-center justify-center text-white text-center p-1 text-xs font-bold leading-tight uppercase"
+                            id="book-cover-text">
+                            ...
+                        </div>
+                        <img alt="Book cover art"
+                            class="w-full h-full object-cover opacity-0 absolute inset-0 transition-opacity"
+                            id="book-cover-img" src="" />
+                    </div>
+                    <div class="flex-1 text-xs space-y-1">
+                        <div>
+                            <p class="text-slate-500">AUTHOR:</p>
+                            <p class="text-slate-200" id="book-author">...</p>
+                        </div>
+                        <div class="flex justify-between">
+                            <div>
+                                <p class="text-slate-500">CHAPS:</p>
+                                <p class="text-slate-200" id="book-chapters">...</p>
+                            </div>
+                            <div>
+                                <p class="text-slate-500">EST_TIME:</p>
+                                <p class="text-slate-200" id="book-est-time">~... hr</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-slate-500">STATUS:</p>
+                            <span class="text-console-success font-medium" id="book-status">
+                                ...
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1 flex flex-col min-h-0">
+                <div class="p-4 border-b border-border-dark bg-surface-dark/50">
+                    <h3 class="text-sm font-semibold text-primary flex items-center gap-2 uppercase">
+                        <span class="material-symbols-outlined text-base">visibility</span>
+                        PREVIEW // <span id="preview-title">...</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-1 truncate" id="preview-subtitle">...</p>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 bg-surface-dark text-console-text text-sm leading-relaxed">
+                    <div class="prose prose-sm dark:prose-invert max-w-none text-slate-300" id="preview-content">
+                        <p class="text-xs text-slate-500 italic">// Preview content will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <footer class="bg-surface-dark border-t border-border-dark p-4 shadow-lg shrink-0 z-30 flex flex-col">
+        <div class="flex items-center gap-3 mb-3">
+            <div class="flex items-center gap-2 w-full max-w-xs">
+                <span class="material-symbols-outlined text-slate-400 text-sm">record_voice_over</span>
+                <select
+                    class="terminal-select block w-full pl-3 pr-8 py-1 text-sm border-border-dark bg-slate-900 rounded-none focus:outline-none focus:ring-primary focus:border-primary text-slate-300">
+                    <option>EN-US NEURAL (F)</option>
+                    <option>EN-US NEURAL (M)</option>
+                    <option>EN-GB STANDARD</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2 text-xs uppercase">
+                <button
+                    class="flex items-center justify-center gap-1 px-2 py-1 rounded-none text-slate-400 hover:bg-slate-700 border border-border-dark transition-colors"
+                    id="cancel-btn" title="Cancel (Ctrl+C)">
+                    <span class="material-symbols-outlined text-sm">cancel</span>
+                    CAN
+                </button>
+                <button
+                    class="flex items-center justify-center gap-1 px-2 py-1 rounded-none text-slate-400 hover:bg-slate-700 border border-border-dark transition-colors"
+                    id="pause-btn" title="Pause (Ctrl+P)">
+                    <span class="material-symbols-outlined text-sm">pause</span>
+                    PAU
+                </button>
+                <button
+                    class="flex items-center justify-center gap-1 px-3 py-1 rounded-none text-sm font-bold text-background-dark bg-primary hover:bg-primary-hover shadow-md transition-all transform active:scale-95 uppercase"
+                    id="generate-btn" title="Generate (Ctrl+G)">
+                    <span class="material-symbols-outlined text-sm">play_arrow</span>
+                    GENERATE
                 </button>
             </div>
         </div>
-        <div class="flex-1 overflow-y-auto px-4 py-2 relative">
-            <input class="sticky top-0 z-20 w-full bg-surface-dark border-b border-border-dark py-1 px-2 text-sm text-console-text placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary mb-2 rounded-none"
-                   placeholder="FILTER / SELECT (Ctrl+F)" type="text"/>
-            <table class="w-full text-left text-sm text-slate-400">
-                <thead class="text-xs text-slate-500 uppercase bg-background-dark sticky top-8 z-10">
-                <tr>
-                    <th class="py-2 px-1 w-8 text-center" scope="col">
-                        <input class="rounded-none border-slate-600" id="select-all-checkbox" type="checkbox"/>
-                    </th>
-                    <th class="py-2 px-1" scope="col">TITLE</th>
-                    <th class="py-2 px-1 text-right" scope="col">SIZE</th>
-                </tr>
-                </thead>
-                <tbody class="divide-y divide-border-dark" id="chapter-table">
-                </tbody>
-            </table>
+        <div class="h-24 w-full bg-slate-950 rounded-none p-2 font-mono text-xs overflow-y-auto border border-slate-700 shadow-inner"
+            id="console-output">
         </div>
-    </div>
-    <div class="w-96 flex flex-col bg-surface-dark border-l border-border-dark overflow-y-auto shrink-0 z-20">
-        <div class="p-4 border-b border-border-dark">
-            <h3 class="text-sm uppercase tracking-wide text-slate-500 mb-3 text-primary">BOOK INFO //
-                <span id="book-title-info">...</span></h3>
-            <div class="flex gap-3">
-                <div class="w-20 h-28 shrink-0 border border-slate-700 overflow-hidden bg-slate-900 aspect-[2/3] relative">
-                    <div class="absolute inset-0 bg-gradient-to-br from-indigo-700 to-purple-800 flex items-center justify-center text-white text-center p-1 text-xs font-bold leading-tight uppercase"
-                         id="book-cover-text">
-                        ...
-                    </div>
-                    <img alt="Book cover art" class="w-full h-full object-cover opacity-0 absolute inset-0 transition-opacity"
-                         id="book-cover-img" src=""/>
-                </div>
-                <div class="flex-1 text-xs space-y-1">
-                    <div>
-                        <p class="text-slate-500">AUTHOR:</p>
-                        <p class="text-slate-200" id="book-author">...</p>
-                    </div>
-                    <div class="flex justify-between">
-                        <div>
-                            <p class="text-slate-500">CHAPS:</p>
-                            <p class="text-slate-200" id="book-chapters">...</p>
-                        </div>
-                        <div>
-                            <p class="text-slate-500">EST_TIME:</p>
-                            <p class="text-slate-200">~... hr</p>
-                        </div>
-                    </div>
-                    <div>
-                        <p class="text-slate-500">STATUS:</p>
-                        <span class="text-console-success font-medium" id="book-status">
-                            ...
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="flex-1 flex flex-col min-h-0">
-            <div class="p-4 border-b border-border-dark bg-surface-dark/50">
-                <h3 class="text-sm font-semibold text-primary flex items-center gap-2 uppercase">
-                    <span class="material-symbols-outlined text-base">visibility</span>
-                    PREVIEW // ...
-                </h3>
-                <p class="text-xs text-slate-400 mt-1 truncate">...</p>
-            </div>
-            <div class="flex-1 overflow-y-auto p-4 bg-surface-dark text-console-text text-sm leading-relaxed">
-                <div class="prose prose-sm dark:prose-invert max-w-none text-slate-300">
-                    <p class="text-xs text-slate-500 italic">// Preview content will appear here</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</main>
-<footer class="bg-surface-dark border-t border-border-dark p-4 shadow-lg shrink-0 z-30 flex flex-col">
-    <div class="flex items-center gap-3 mb-3">
-        <div class="flex items-center gap-2 w-full max-w-xs">
-            <span class="material-symbols-outlined text-slate-400 text-sm">record_voice_over</span>
-            <select class="terminal-select block w-full pl-3 pr-8 py-1 text-sm border-border-dark bg-slate-900 rounded-none focus:outline-none focus:ring-primary focus:border-primary text-slate-300">
-                <option>EN-US NEURAL (F)</option>
-                <option>EN-US NEURAL (M)</option>
-                <option>EN-GB STANDARD</option>
-            </select>
-        </div>
-        <div class="flex items-center gap-2 text-xs uppercase">
-            <button class="flex items-center justify-center gap-1 px-2 py-1 rounded-none text-slate-400 hover:bg-slate-700 border border-border-dark transition-colors"
-                    id="cancel-btn" title="Cancel (Ctrl+C)">
-                <span class="material-symbols-outlined text-sm">cancel</span>
-                CAN
-            </button>
-            <button class="flex items-center justify-center gap-1 px-2 py-1 rounded-none text-slate-400 hover:bg-slate-700 border border-border-dark transition-colors"
-                    id="pause-btn" title="Pause (Ctrl+P)">
-                <span class="material-symbols-outlined text-sm">pause</span>
-                PAU
-            </button>
-            <button class="flex items-center justify-center gap-1 px-3 py-1 rounded-none text-sm font-bold text-background-dark bg-primary hover:bg-primary-hover shadow-md transition-all transform active:scale-95 uppercase"
-                    id="generate-btn" title="Generate (Ctrl+G)">
-                <span class="material-symbols-outlined text-sm">play_arrow</span>
-                GENERATE
-            </button>
-        </div>
-    </div>
-    <div class="h-24 w-full bg-slate-950 rounded-none p-2 font-mono text-xs overflow-y-auto border border-slate-700 shadow-inner"
-         id="console-output">
-    </div>
-</footer>
-<script src="../static/main.js"></script>
+    </footer>
+    <script src="../static/main.js"></script>
 </body>
+
 </html>

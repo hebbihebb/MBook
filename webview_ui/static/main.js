@@ -19,7 +19,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const bookCoverImg = document.getElementById("book-cover-img");
     const bookAuthor = document.getElementById("book-author");
     const bookChapters = document.getElementById("book-chapters");
+    const bookEstTime = document.getElementById("book-est-time");
     const bookStatus = document.getElementById("book-status");
+
+    // Preview elements
+    const previewTitle = document.getElementById("preview-title");
+    const previewSubtitle = document.getElementById("preview-subtitle");
+    const previewContent = document.getElementById("preview-content");
 
     let chapters = [];
     let eventSource = null;
@@ -143,6 +149,34 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // Function to load chapter preview
+    async function loadChapterPreview(index) {
+        try {
+            const data = await window.electronAPI.apiRequest("/api/get_chapter_content", {
+                method: "POST",
+                body: { index: index }
+            });
+
+            if (data.error) {
+                logToConsole(`Error loading preview: ${data.error}`, "error");
+                return;
+            }
+
+            previewTitle.textContent = `CH ${index + 1}`;
+            previewSubtitle.textContent = data.title;
+            // Simple text formatting for preview
+            previewContent.innerHTML = data.content
+                .split('\n')
+                .map(para => para.trim())
+                .filter(para => para)
+                .map(para => `<p class="mb-2">${para}</p>`)
+                .join('');
+
+        } catch (error) {
+            logToConsole(`Failed to load preview: ${error}`, "error");
+        }
+    }
+
     const updateChapterTable = () => {
         chapterTable.innerHTML = "";
         chapterCountSpan.textContent = chapters.length;
@@ -150,12 +184,21 @@ document.addEventListener("DOMContentLoaded", () => {
             const row = document.createElement("tr");
             row.className = "hover:bg-chapter-hover transition-colors group cursor-pointer";
             row.innerHTML = `
-                <td class="py-1 px-1 text-center">
+                <td class="py-1 px-1 text-center" onclick="event.stopPropagation()">
                     <input type="checkbox" class="rounded-none border-slate-600 chapter-checkbox" data-index="${index}" checked />
                 </td>
                 <td class="py-1 px-1 text-slate-300 group-hover:text-primary transition-colors">${chapter.title}</td>
                 <td class="py-1 px-1 text-right text-slate-500 text-xs">${(chapter.size / 1024).toFixed(1)}k</td>
             `;
+
+            // Add click listener for preview
+            row.addEventListener("click", () => {
+                // Highlight active row
+                document.querySelectorAll("#chapter-table tr").forEach(r => r.classList.remove("bg-surface-dark"));
+                row.classList.add("bg-surface-dark");
+                loadChapterPreview(index);
+            });
+
             chapterTable.appendChild(row);
         });
     };
@@ -164,11 +207,15 @@ document.addEventListener("DOMContentLoaded", () => {
         bookTitleInfo.textContent = data.title;
         bookCoverText.textContent = data.title;
         if (data.cover_image) {
-            bookCoverImg.src = data.cover_image;
+            // Add timestamp to bust cache and prepend server URL
+            bookCoverImg.src = `http://127.0.0.1:5000${data.cover_image}?t=${new Date().getTime()}`;
             bookCoverImg.classList.add("opacity-100");
         }
         bookAuthor.textContent = data.author;
         bookChapters.textContent = data.chapters.length;
+        if (data.estimated_hours) {
+            bookEstTime.textContent = `~${data.estimated_hours} hr`;
+        }
         bookStatus.textContent = "READY";
     };
 

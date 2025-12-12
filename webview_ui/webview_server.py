@@ -75,11 +75,23 @@ def select_epub():
         epub_parser = EpubParser(filepath)
         chapters = epub_parser.get_chapters()
         cover_image_path = epub_parser.get_cover_image_path()
+        
+        # Calculate word count and estimated time
+        # Formula: (Word Count / 9000) * 2 hours
+        total_words = 0
+        for ch in chapters:
+            # Simple word count approximation
+            total_words += len(ch.content.split())
+            
+        estimated_hours = (total_words / 9000) * 2
+        
         book_info = {
             "title": epub_parser.get_book_title(),
             "author": epub_parser.get_book_author(),
             "cover_image": "/api/cover_image" if cover_image_path else None,
             "filepath": filepath,
+            "total_words": total_words,
+            "estimated_hours": round(estimated_hours, 1),
             "chapters": [
                 {"title": str(ch.title), "size": len(ch.content)}
                 for ch in chapters
@@ -114,6 +126,33 @@ def select_output_dir():
     if not directory:
         return jsonify({"error": "No directory selected."}), 400
     return jsonify({"output_dir": directory})
+
+@app.route("/api/get_chapter_content", methods=["POST"])
+def get_chapter_content():
+    """Get the text content of a specific chapter for preview."""
+    if not epub_parser:
+        return jsonify({"error": "No EPUB loaded"}), 400
+
+    data = request.get_json() if request.is_json else {}
+    chapter_index = data.get("index")
+
+    if chapter_index is None:
+        return jsonify({"error": "No chapter index provided"}), 400
+
+    try:
+        chapters = epub_parser.get_chapters()
+        if 0 <= chapter_index < len(chapters):
+            chapter = chapters[chapter_index]
+            # Return the first 2000 characters for preview
+            content_preview = chapter.content[:2000] + "..." if len(chapter.content) > 2000 else chapter.content
+            return jsonify({
+                "title": chapter.title,
+                "content": content_preview
+            })
+        else:
+            return jsonify({"error": "Invalid chapter index"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/generate", methods=["POST"])
 def generate_audiobook():
