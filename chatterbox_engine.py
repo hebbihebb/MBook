@@ -13,6 +13,19 @@ import os
 import numpy as np
 
 
+def is_chatterbox_available() -> bool:
+    """Check if chatterbox-tts package is installed.
+
+    Returns:
+        True if chatterbox-tts is available, False otherwise
+    """
+    try:
+        import chatterbox
+        return True
+    except ImportError:
+        return False
+
+
 class ChatterboxTurboEngine:
     """Chatterbox Turbo TTS engine with voice cloning capability."""
 
