@@ -33,5 +33,8 @@ Flask
 # Utilities
 numpy
 
+# Optional: Chatterbox Turbo TTS (alternative to Maya1)
+chatterbox-tts>=0.1.0
+
 # Optional: faster inference with vLLM
 # pip install vllm

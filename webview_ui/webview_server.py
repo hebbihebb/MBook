@@ -27,22 +27,80 @@ DEFAULT_VOICE_PROMPT = "Male narrator voice in his 40s with an American accent. 
 
 # Voice presets
 VOICE_PRESETS = [
+    # Maya1 presets (natural language voice descriptions)
     {
         "id": "male_us_warm",
         "label": "EN-US NEURAL (M)",
+        "engine": "maya1",
         "prompt": "Male narrator voice in his 40s with an American accent. Warm baritone, calm pacing, clear diction, conversational delivery."
     },
     {
         "id": "female_us_clear",
         "label": "EN-US NEURAL (F)",
+        "engine": "maya1",
         "prompt": "Female narrator voice in her 30s with an American accent. Professional, clear articulation, warm and engaging tone."
     },
     {
         "id": "male_uk_classic",
         "label": "EN-GB STANDARD",
+        "engine": "maya1",
         "prompt": "Male narrator voice with a British accent in his 40s. Classic BBC style, authoritative and refined tone, measured pacing."
+    },
+    # Chatterbox Turbo presets (voice cloning via reference audio)
+    {
+        "id": "chatterbox_male_us",
+        "label": "EN-US CHATTERBOX (M)",
+        "engine": "chatterbox",
+        "reference_audio": "voice_samples/en_us_male_warm.wav"
+    },
+    {
+        "id": "chatterbox_female_us",
+        "label": "EN-US CHATTERBOX (F)",
+        "engine": "chatterbox",
+        "reference_audio": "voice_samples/en_us_female_clear.wav"
+    },
+    {
+        "id": "chatterbox_male_gb",
+        "label": "EN-GB CHATTERBOX",
+        "engine": "chatterbox",
+        "reference_audio": "voice_samples/en_gb_male_standard.wav"
     }
 ]
+
+
+def validate_voice_preset(voice_id: str) -> dict:
+    """Get voice preset configuration and validate resources.
+
+    Args:
+        voice_id: Voice preset ID to validate
+
+    Returns:
+        Validated voice preset configuration dictionary
+
+    Raises:
+        ValueError: If preset ID is unknown
+        FileNotFoundError: If Chatterbox reference audio file is missing
+    """
+    # Find preset by ID
+    preset = next((p for p in VOICE_PRESETS if p["id"] == voice_id), None)
+    if not preset:
+        raise ValueError(f"Unknown voice preset: {voice_id}")
+
+    # Validate Chatterbox reference audio exists
+    if preset.get("engine") == "chatterbox":
+        ref_path = preset.get("reference_audio")
+        if not ref_path:
+            raise ValueError(f"Chatterbox preset {voice_id} missing reference_audio field")
+
+        # Check if reference audio file exists
+        if not os.path.exists(ref_path):
+            raise FileNotFoundError(
+                f"Reference audio missing: {ref_path}\n"
+                f"Please ensure voice samples are in voice_samples/ directory.\n"
+                f"Run: python generate_voice_samples.py"
+            )
+
+    return preset
 
 @app.route("/")
 def index():
@@ -194,12 +252,13 @@ def generate_audiobook():
         selected_chapters.append(i)
 
     output_dir = data["output_dir"]
-    voice_prompt = data.get("voice_prompt", DEFAULT_VOICE_PROMPT)
+    # Get voice preset ID (defaults to maya1 male preset for backward compatibility)
+    voice_preset_id = data.get("voice_preset_id", "male_us_warm")
 
     # Start background thread
     thread = threading.Thread(
         target=run_conversion_job,
-        args=(epub_parser.epub_path, output_dir, selected_chapters, voice_prompt, conversion_state),
+        args=(epub_parser.epub_path, output_dir, selected_chapters, voice_preset_id, conversion_state),
         daemon=True
     )
     thread.start()

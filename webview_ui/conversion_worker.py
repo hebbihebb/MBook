@@ -21,18 +21,20 @@ def run_conversion_job(
     epub_path: str,
     output_dir: str,
     selected_chapters: list,
-    voice_prompt: str,
+    voice_preset_id: str,
     state: ConversionState
 ):
     """
     Main conversion orchestration (adapted from main.py:608-886).
     Updates ConversionState instead of GUI.
 
+    Supports both Maya1 and Chatterbox Turbo engines via voice preset selection.
+
     Args:
         epub_path: Path to the EPUB file
         output_dir: Directory for output files
         selected_chapters: List of chapter indices to convert
-        voice_prompt: Voice description for TTS
+        voice_preset_id: Voice preset ID (determines engine and voice settings)
         state: ConversionState object for progress tracking
     """
     try:
@@ -44,6 +46,16 @@ def run_conversion_job(
         from epub_parser import get_cover_extension
         import soundfile as sf
         import torch
+
+        # Import validate_voice_preset from server module
+        from webview_server import validate_voice_preset
+
+        # Validate and get voice preset configuration
+        state.add_log(f"Loading voice preset: {voice_preset_id}")
+        preset = validate_voice_preset(voice_preset_id)
+        engine_type = preset.get("engine", "maya1")  # Default to Maya1
+
+        state.add_log(f"Selected engine: {engine_type}")
 
         os.makedirs(output_dir, exist_ok=True)
 
@@ -101,7 +113,7 @@ def run_conversion_job(
             epub_path=epub_path,
             output_dir=output_dir,
             selected_chapters=selected_chapters,
-            voice_prompt=voice_prompt,
+            voice_prompt=preset.get("prompt", "") or preset.get("reference_audio", ""),  # Store voice config
             total_chunks=total_chunks,
             completed_chunks=list(chunk_files.keys()),
             chunk_files=chunk_files,
@@ -109,16 +121,34 @@ def run_conversion_job(
             chapter_titles=chapter_titles
         )
 
-        # Load TTS engine
+        # Load TTS engine based on preset
         state.add_log("Loading model...")
         state.update_progress(5, "Loading TTS model...")
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        engine = Maya1TTSEngine(LOCAL_MODEL_DIR, device)
-        engine.load()
-        sample_rate = 24000
 
-        state.add_log("Model loaded")
+        if engine_type == "chatterbox":
+            # Load Chatterbox Turbo engine
+            from chatterbox_engine import ChatterboxTurboEngine
+
+            state.add_log("Loading Chatterbox Turbo...")
+            engine = ChatterboxTurboEngine(device=device)
+            engine.load()
+            sample_rate = 22050  # Chatterbox outputs 22.05kHz
+            reference_audio = preset["reference_audio"]
+
+            state.add_log(f"Chatterbox Turbo loaded (reference: {os.path.basename(reference_audio)})")
+
+        else:  # maya1 (default)
+            # Load Maya1 engine
+            state.add_log("Loading Maya1...")
+            engine = Maya1TTSEngine(LOCAL_MODEL_DIR, device)
+            engine.load()
+            sample_rate = 24000  # Maya1 outputs 24kHz
+            voice_prompt = preset["prompt"]
+
+            state.add_log("Maya1 loaded")
+
         state.update_progress(10, "Generating audio...")
 
         # Generate chunks sequentially
@@ -148,7 +178,19 @@ def run_conversion_job(
             state.update_progress(10 + (i / total_chunks) * 75, status_text)
 
             try:
-                audio = engine.generate_audio(chunk, voice_prompt, max_duration_sec=60)
+                # Generate audio with engine-specific parameters
+                if engine_type == "chatterbox":
+                    audio = engine.generate_audio(
+                        text=chunk,
+                        reference_audio_path=reference_audio,
+                        max_duration_sec=60
+                    )
+                else:  # maya1
+                    audio = engine.generate_audio(
+                        text=chunk,
+                        voice_description=voice_prompt,
+                        max_duration_sec=60
+                    )
 
                 if audio is not None and len(audio) > 0:
                     chunk_path = os.path.join(temp_dir, f"chunk_{i:04d}.wav")
