@@ -1,3 +1,42 @@
+// Fallback API wrapper for browser access (when Electron API not available)
+const API = {
+    async apiRequest(url, options = {}) {
+        if (window.electronAPI) {
+            // Use Electron API if available
+            return await window.electronAPI.apiRequest(url, options);
+        } else {
+            // Fallback to direct fetch for browser access
+            const fetchOptions = {
+                method: options.method || 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+            if (options.body) {
+                fetchOptions.body = JSON.stringify(options.body);
+            }
+            const response = await fetch(url, fetchOptions);
+            return await response.json();
+        }
+    },
+    async openFileDialog() {
+        if (window.electronAPI) {
+            return await window.electronAPI.openFileDialog();
+        } else {
+            // Browser fallback: prompt for file path
+            return prompt('Enter EPUB file path:');
+        }
+    },
+    async openFolderDialog() {
+        if (window.electronAPI) {
+            return await window.electronAPI.openFolderDialog();
+        } else {
+            // Browser fallback: prompt for folder path
+            return prompt('Enter output directory path:');
+        }
+    }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
     const epubPathInput = document.getElementById("epub-path");
     const outputDirInput = document.getElementById("output-dir");
@@ -48,12 +87,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load voice presets on page load
     async function loadVoicePresets() {
         try {
-            const data = await window.electronAPI.apiRequest('/api/voice_presets', { method: 'GET' });
+            const data = await API.apiRequest('/api/voice_presets', { method: 'GET' });
 
             voiceSelect.innerHTML = '';
             data.presets.forEach(preset => {
                 const option = document.createElement('option');
-                option.value = preset.prompt;
+                option.value = preset.id;  // Fixed: Use preset ID instead of prompt
                 option.textContent = preset.label;
                 voiceSelect.appendChild(option);
             });
@@ -65,7 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Function to load EPUB from filepath (used by both browse and manual entry)
     async function loadEpubFromPath(filepath) {
         try {
-            const data = await window.electronAPI.apiRequest("/api/select_epub", {
+            const data = await API.apiRequest("/api/select_epub", {
                 method: "POST",
                 body: { filepath: filepath }
             });
@@ -86,7 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
     browseEpubBtn.addEventListener("click", async () => {
         try {
             // Use Electron's native file dialog
-            const filepath = await window.electronAPI.openFileDialog();
+            const filepath = await API.openFileDialog();
             if (filepath) {
                 logToConsole(`Loading EPUB from: ${filepath}`, "info");
                 await loadEpubFromPath(filepath);
@@ -110,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Function to set output directory (used by both browse and manual entry)
     async function setOutputDirectory(dirpath) {
         try {
-            const data = await window.electronAPI.apiRequest("/api/select_output_dir", {
+            const data = await API.apiRequest("/api/select_output_dir", {
                 method: "POST",
                 body: { output_dir: dirpath }
             });
@@ -128,7 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
     browseOutputBtn.addEventListener("click", async () => {
         try {
             // Use Electron's native folder dialog
-            const dirpath = await window.electronAPI.openFolderDialog();
+            const dirpath = await API.openFolderDialog();
             if (dirpath) {
                 logToConsole(`Setting output directory to: ${dirpath}`, "info");
                 await setOutputDirectory(dirpath);
@@ -152,7 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Function to load chapter preview
     async function loadChapterPreview(index) {
         try {
-            const data = await window.electronAPI.apiRequest("/api/get_chapter_content", {
+            const data = await API.apiRequest("/api/get_chapter_content", {
                 method: "POST",
                 body: { index: index }
             });
@@ -323,16 +362,16 @@ document.addEventListener("DOMContentLoaded", () => {
         isPaused = false;
         pauseBtn.innerHTML = '<span class="material-symbols-outlined text-sm">pause</span> PAU';
 
-        // Get selected voice prompt
-        const voicePrompt = voiceSelect.value;
+        // Get selected voice preset ID
+        const voicePresetId = voiceSelect.value;
 
         try {
-            const data = await window.electronAPI.apiRequest("/api/generate", {
+            const data = await API.apiRequest("/api/generate", {
                 method: "POST",
                 body: {
                     chapters: selectedChapters,
                     output_dir: outputDirInput.value,
-                    voice_prompt: voicePrompt
+                    voice_preset_id: voicePresetId  // Fixed: Use correct parameter name
                 }
             });
             if (data.status === "started") {
@@ -354,7 +393,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const action = isPaused ? "resume" : "pause";
 
         try {
-            const data = await window.electronAPI.apiRequest("/api/pause", {
+            const data = await API.apiRequest("/api/pause", {
                 method: "POST",
                 body: { action }
             });
@@ -383,7 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         try {
-            const data = await window.electronAPI.apiRequest("/api/cancel", { method: "POST" });
+            const data = await API.apiRequest("/api/cancel", { method: "POST" });
 
             if (data.status === "cancelling") {
                 logToConsole("Cancellation requested...", "warning");

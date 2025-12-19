@@ -41,12 +41,12 @@ def main():
 
     # Initialize engine
     print("Loading Chatterbox Turbo engine...")
-    engine = ChatterboxTurboEngine(device="cuda", reference_audio=reference_audio)
+    engine = ChatterboxTurboEngine(device="cuda")
     engine.load()
 
     # Generate audio
     print("Generating audio...")
-    audio = engine.generate_audio(text)
+    audio = engine.generate_audio(text, reference_audio)
 
     # Save output
     os.makedirs("output", exist_ok=True)

@@ -64,6 +64,19 @@ VOICE_PRESETS = [
         "label": "EN-GB CHATTERBOX",
         "engine": "chatterbox",
         "reference_audio": "voice_samples/en_gb_male_standard.wav"
+    },
+    # Custom narrator voices
+    {
+        "id": "chatterbox_ks",
+        "label": "KAREN SAVAGE (F)",
+        "engine": "chatterbox",
+        "reference_audio": "voice_samples/KS_FEMALE_22k.wav"
+    },
+    {
+        "id": "chatterbox_sj",
+        "label": "SCARLETT J (F)",
+        "engine": "chatterbox",
+        "reference_audio": "voice_samples/SJ_FEMALE_22k.wav"
     }
 ]
 
