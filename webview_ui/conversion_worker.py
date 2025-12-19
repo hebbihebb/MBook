@@ -81,7 +81,8 @@ def run_conversion_job(
             chapter_idx = len(chapter_titles) - 1
 
             cleaned = clean_text(chapter.content)
-            chunks = chunk_text_for_quality(cleaned, max_words=50, min_words=15)
+            # Keep Chatterbox-friendly chunk sizes (~40 words) for better quality
+            chunks = chunk_text_for_quality(cleaned, max_words=40, min_words=15)
 
             for chunk in chunks:
                 all_chunks.append(chunk)
@@ -180,11 +181,27 @@ def run_conversion_job(
             try:
                 # Generate audio with engine-specific parameters
                 if engine_type == "chatterbox":
+                    # Debug: Log chunk text and length
+                    state.add_log(f"[DEBUG] Chunk {i+1} length: {len(chunk)} chars, words: {len(chunk.split())}")
+                    state.add_log(f"[DEBUG] Chunk text preview: {chunk[:100]}...")
+                    # Persist full chunk text for postmortem analysis
+                    try:
+                        debug_text_path = os.path.join(temp_dir, f"chunk_{i:04d}.txt")
+                        with open(debug_text_path, "w", encoding="utf-8") as f:
+                            f.write(chunk)
+                        print(f"[DEBUG] Saved chunk text to {debug_text_path}", flush=True)
+                    except Exception as e:
+                        state.add_log(f"[DEBUG] Failed to write chunk text: {e}")
+
                     audio = engine.generate_audio(
                         text=chunk,
                         reference_audio_path=reference_audio,
                         max_duration_sec=60
                     )
+
+                    # Debug: Log audio stats
+                    if audio is not None:
+                        state.add_log(f"[DEBUG] Audio shape: {audio.shape}, dtype: {audio.dtype}, range: [{audio.min():.3f}, {audio.max():.3f}]")
                 else:  # maya1
                     audio = engine.generate_audio(
                         text=chunk,
@@ -225,7 +242,7 @@ def run_conversion_job(
         state.update_progress(86, "Stitching audio...")
 
         audio_files = [progress.chunk_files[i] for i in sorted(progress.chunk_files.keys())]
-        chunk_mapping = [chunk_to_chapter[i] for i in sorted(progress.chunk_files.keys())]
+        chunk_mapping = [progress.chunk_to_chapter[i] for i in sorted(progress.chunk_files.keys())]
 
         output_wav, chapters_info = stitch_audio_with_chapter_tracking(
             audio_files,

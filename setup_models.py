@@ -2,6 +2,9 @@ import os
 import sys
 import subprocess
 
+LOCAL_MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "maya1")
+MODEL_ID = "maya-research/maya1"
+
 def install_spacy_model():
     print("Downloading Spacy model 'en_core_web_sm'...")
     try:
@@ -11,20 +14,21 @@ def install_spacy_model():
         print(f"Error installing Spacy model: {e}")
 
 def download_hf_model():
-    print("Downloading HuggingFace model 'maya-research/maya1'...")
+    print(f"Downloading HuggingFace model '{MODEL_ID}'...")
     try:
-        from transformers import AutoTokenizer, AutoModel
-        model_id = "maya-research/maya1"
-        
-        print(f"Downloading Tokenizer for {model_id}...")
-        try:
-            AutoTokenizer.from_pretrained(model_id)
-        except Exception as e:
-             print(f"Tokenizer not found ({e}) - might not use one, skipping.")
+        from huggingface_hub import snapshot_download
 
-        print(f"Downloading Model for {model_id}...")
-        AutoModel.from_pretrained(model_id)
-        
+        os.makedirs(LOCAL_MODEL_DIR, exist_ok=True)
+        print(f"Downloading to local path: {LOCAL_MODEL_DIR}")
+        try:
+            snapshot_download(
+                MODEL_ID,
+                local_dir=LOCAL_MODEL_DIR,
+                local_dir_use_symlinks=False
+            )
+        except TypeError:
+            # Backward compatibility for older huggingface_hub versions.
+            snapshot_download(MODEL_ID, local_dir=LOCAL_MODEL_DIR)
         print("HF Model downloaded successfully.")
     except Exception as e:
         print(f"Error downloading HF model (Do you have access/internet?): {e}")

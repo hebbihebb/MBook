@@ -60,6 +60,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const bookChapters = document.getElementById("book-chapters");
     const bookEstTime = document.getElementById("book-est-time");
     const bookStatus = document.getElementById("book-status");
+    const progressBar = document.getElementById("progress-bar");
+    const progressLabel = document.getElementById("progress-label");
+    const chunkLabel = document.getElementById("chunk-label");
 
     // Preview elements
     const previewTitle = document.getElementById("preview-title");
@@ -256,6 +259,9 @@ document.addEventListener("DOMContentLoaded", () => {
             bookEstTime.textContent = `~${data.estimated_hours} hr`;
         }
         bookStatus.textContent = "READY";
+        progressLabel.textContent = "Idle";
+        chunkLabel.textContent = "0 / 0";
+        progressBar.style.width = "0%";
     };
 
     selectAllBtn.addEventListener("click", () => {
@@ -283,9 +289,19 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = JSON.parse(e.data);
 
             if (data.event === "progress") {
-                // Update progress display
-                if (data.progress !== undefined && data.status === "running") {
-                    bookStatus.textContent = `GENERATING (${Math.round(data.progress)}%)`;
+                // Update progress display and chunk info
+                const pct = data.progress !== undefined ? Math.round(data.progress) : 0;
+                const current = data.current_chunk || 0;
+                const total = data.total_chunks || 0;
+                const statusText = data.status_text || "";
+                progressBar.style.width = `${pct}%`;
+                progressLabel.textContent = data.status === "running"
+                    ? (statusText ? `${statusText}` : `Running (${pct}%)`)
+                    : data.status?.toUpperCase() || "Idle";
+                chunkLabel.textContent = total ? `${current} / ${total}` : `${current} / ?`;
+                if (data.status === "running") {
+                    bookStatus.textContent = `GENERATING (${pct}%)`;
+                    bookStatus.className = "text-console-info font-medium";
                 }
 
                 // Sync pause button state
@@ -304,20 +320,28 @@ document.addEventListener("DOMContentLoaded", () => {
                     logToConsole(data.message, data.level);
                     displayedLogs.add(data.timestamp);
                 }
+            } else if (data.event === "idle") {
+                progressBar.style.width = "0%";
+                progressLabel.textContent = "Idle";
+                chunkLabel.textContent = "0 / 0";
             } else if (data.event === "completed") {
                 logToConsole(`Completed! Output: ${data.final_path}`, "success");
                 bookStatus.textContent = "COMPLETED";
                 bookStatus.className = "text-console-success font-medium";
+                progressBar.style.width = "100%";
+                progressLabel.textContent = "Completed";
                 stopEventStream();
             } else if (data.event === "error") {
                 logToConsole(`Error: ${data.error}`, "error");
                 bookStatus.textContent = "ERROR";
                 bookStatus.className = "text-console-error font-medium";
+                progressLabel.textContent = "Error";
                 stopEventStream();
             } else if (data.event === "cancelled") {
                 logToConsole("Conversion cancelled", "warning");
                 bookStatus.textContent = "CANCELLED";
                 bookStatus.className = "text-console-warning font-medium";
+                progressLabel.textContent = "Cancelled";
                 stopEventStream();
             }
         };
@@ -354,6 +378,9 @@ document.addEventListener("DOMContentLoaded", () => {
         logToConsole(`Starting generation of ${selectedChapters.length} chapters...`, "info");
         bookStatus.textContent = "STARTING...";
         bookStatus.className = "text-console-info font-medium";
+        progressLabel.textContent = "Starting...";
+        chunkLabel.textContent = "0 / ?";
+        progressBar.style.width = "5%";
 
         // Clear previous logs
         displayedLogs.clear();
