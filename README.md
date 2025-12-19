@@ -66,9 +66,15 @@ npm install
 cd ..
 ```
 
-**Models downloaded automatically on first run:**
-- Maya1 model (~6.6GB) - for prompt-based TTS
-- Chatterbox Turbo model (~350MB) - for voice cloning (if installed)
+**Model downloads**
+- Maya1 TTS (~6.6GB) is expected at `models/maya1`. If it is missing, the app will fail to load the model.
+- Chatterbox Turbo (~350MB) downloads on first use if `chatterbox-tts` is installed.
+- SNAC decoder and Silero VAD download on first use into their default caches.
+
+To pre-download everything (recommended for offline use):
+```bash
+python setup_models.py
+```
 
 ## Usage
 
