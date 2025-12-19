@@ -22,6 +22,7 @@ wheels/
 
 # Virtual environments
 venv/
+venv_*/
 ENV/
 env/
 .venv/
@@ -40,6 +41,8 @@ models/maya1/
 # Generated outputs
 audiobook_output/
 generated_samples/
+output/
+.python/
 
 # Test EPUB files (user-provided)
 *.epub
