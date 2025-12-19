@@ -378,10 +378,21 @@ def chunk_text_for_quality(text: str, max_words: int = 40, min_words: int = 10) 
     if nlp is None:
         # Fallback to simple sentence splitting if spacy is not available
         print("[CHUNK] Using simple sentence splitting (spacy not available)")
-        sentences = []
-        for sent in text.split('. '):
-            if sent.strip():
-                sentences.append(sent.strip() + ".")
+        # Split on common sentence boundaries; if none exist, split on commas/semicolons/colons
+        import re
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', text) if s.strip()]
+        if not sentences:
+            sentences = [s.strip() for s in re.split(r'[,:;]\s+', text) if s.strip()]
+        # If a sentence is still too long, break it further on commas/semicolons/colons
+        normalized_sentences = []
+        for sent in sentences:
+            words = sent.split()
+            if len(words) > max_words:
+                parts = [p.strip() for p in re.split(r'[,:;]\s+', sent) if p.strip()]
+                normalized_sentences.extend(parts if parts else [sent])
+            else:
+                normalized_sentences.append(sent)
+        sentences = normalized_sentences
 
         # Chunk sentences by word count
         chunks = []
