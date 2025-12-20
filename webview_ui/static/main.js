@@ -40,6 +40,9 @@ const API = {
 document.addEventListener("DOMContentLoaded", () => {
     const epubPathInput = document.getElementById("epub-path");
     const outputDirInput = document.getElementById("output-dir");
+    const serverOutputSelect = document.getElementById("server-output-select");
+    const epubDropZone = document.getElementById("epub-drop-zone");
+    const uploadOverlay = document.getElementById("upload-overlay");
     const browseEpubBtn = document.getElementById("browse-epub");
     const browseOutputBtn = document.getElementById("browse-output");
     const chapterCountSpan = document.getElementById("chapter-count");
@@ -104,6 +107,46 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // Load available output directories
+    async function loadOutputDirs() {
+        try {
+            const data = await API.apiRequest('/api/get_output_dirs', { method: 'GET' });
+
+            if (data.dirs && data.dirs.length > 0) {
+                // Remove hidden class and hide manual input/button if running in browser/remote mode
+                // For now, we'll just show the select if we get directories back
+                if (!window.electronAPI) {
+                    serverOutputSelect.classList.remove("hidden");
+                    outputDirInput.classList.add("hidden");
+                    browseOutputBtn.classList.add("hidden");
+
+                    serverOutputSelect.innerHTML = '<option value="" disabled selected>Select server output directory...</option>';
+                    data.dirs.forEach(dir => {
+                        const option = document.createElement('option');
+                        option.value = dir;
+                        option.textContent = dir;
+                        serverOutputSelect.appendChild(option);
+                    });
+
+                    // Add change listener
+                    serverOutputSelect.addEventListener("change", () => {
+                        outputDirInput.value = serverOutputSelect.value;
+                        logToConsole(`Selected output directory: ${serverOutputSelect.value}`, "info");
+                    });
+
+                    // Select first one by default if available
+                    if (data.dirs.length > 0) {
+                        serverOutputSelect.value = data.dirs[0];
+                        outputDirInput.value = data.dirs[0];
+                    }
+                }
+            }
+        } catch (error) {
+            // endpoint might not exist yet or error
+            // logToConsole(`Note: Server directories not available`, "info");
+        }
+    }
+
     // Function to load EPUB from filepath (used by both browse and manual entry)
     async function loadEpubFromPath(filepath) {
         try {
@@ -148,6 +191,79 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
     });
+
+    // Drag and Drop handlers
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        epubDropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        epubDropZone.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        epubDropZone.addEventListener(eventName, unhighlight, false);
+    });
+
+    function highlight(e) {
+        epubDropZone.classList.add('drag-over');
+    }
+
+    function unhighlight(e) {
+        epubDropZone.classList.remove('drag-over');
+    }
+
+    epubDropZone.addEventListener('drop', handleDrop, false);
+
+    async function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.name.toLowerCase().endsWith('.epub')) {
+                await uploadFile(file);
+            } else {
+                logToConsole("Only EPUB files are allowed.", "error");
+            }
+        }
+    }
+
+    async function uploadFile(file) {
+        // Show loading overlay
+        uploadOverlay.classList.remove("hidden");
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            logToConsole(`Uploading ${file.name}...`, "info");
+
+            // Use fetch directly for file upload since it's multipart/form-data
+            const response = await fetch('/api/upload_epub', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                logToConsole("Upload complete.", "success");
+                await loadEpubFromPath(data.filepath);
+            } else {
+                logToConsole(`Upload failed: ${data.error}`, "error");
+            }
+        } catch (error) {
+            logToConsole(`Upload error: ${error}`, "error");
+        } finally {
+            uploadOverlay.classList.add("hidden");
+        }
+    }
 
     // Function to set output directory (used by both browse and manual entry)
     async function setOutputDirectory(dirpath) {
@@ -461,6 +577,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Load voice presets on startup
     loadVoicePresets();
+    loadOutputDirs();
 
     logToConsole("System initialized. Ready for command...", "info");
 });
