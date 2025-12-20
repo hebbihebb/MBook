@@ -53,6 +53,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const consoleOutput = document.getElementById("console-output");
     const voiceSelect = document.querySelector(".terminal-select");
 
+    // Settings Elements
+    const settingsBtn = document.getElementById("settings-btn");
+    const settingsModal = document.getElementById("settings-modal");
+    const closeSettingsBtn = document.getElementById("close-settings");
+    const cancelSettingsBtn = document.getElementById("cancel-settings");
+    const saveSettingsBtn = document.getElementById("save-settings");
+    const maya1Details = document.getElementById("maya1-details");
+    const chatterboxDetails = document.getElementById("chatterbox-details");
+    const maya1PresetList = document.getElementById("maya1-preset-list");
+    const samplesDirPath = document.getElementById("samples-dir-path");
+    const sampleFileList = document.getElementById("sample-file-list");
+    const engineRadios = document.querySelectorAll('input[name="engine"]');
+
     const bookTitleInfo = document.getElementById("book-title-info");
     const bookCoverText = document.getElementById("book-cover-text");
     const bookCoverImg = document.getElementById("book-cover-img");
@@ -87,22 +100,130 @@ document.addEventListener("DOMContentLoaded", () => {
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     };
 
-    // Load voice presets on page load
-    async function loadVoicePresets() {
+    let currentSettings = { default_engine: "maya1" };
+
+    // Load voice presets filtered by engine
+    async function loadVoicePresets(engine) {
         try {
-            const data = await API.apiRequest('/api/voice_presets', { method: 'GET' });
+            const url = engine ? `/api/voice_presets?engine=${engine}` : '/api/voice_presets';
+            const data = await API.apiRequest(url, { method: 'GET' });
 
             voiceSelect.innerHTML = '';
             data.presets.forEach(preset => {
                 const option = document.createElement('option');
-                option.value = preset.id;  // Fixed: Use preset ID instead of prompt
+                option.value = preset.id;
                 option.textContent = preset.label;
                 voiceSelect.appendChild(option);
             });
+            logToConsole(`Loaded voices for engine: ${engine || 'all'}`, "info");
         } catch (error) {
             logToConsole(`Failed to load voice presets: ${error}`, "error");
         }
     }
+
+    // Load settings and initialize UI
+    async function loadSettings() {
+        try {
+            const data = await API.apiRequest('/api/settings', { method: 'GET' });
+            if (data.config) {
+                currentSettings = { ...currentSettings, ...data.config };
+
+                // Update voice list based on default engine
+                await loadVoicePresets(data.default_engine);
+
+                // Pre-populate settings modal info
+                if (data.info) {
+                    populateSettingsInfo(data.info);
+                }
+            }
+        } catch (error) {
+            logToConsole(`Failed to load settings: ${error}`, "error");
+        }
+    }
+
+    function populateSettingsInfo(info) {
+        // Populate Samples
+        samplesDirPath.textContent = info.voice_samples_dir;
+        sampleFileList.innerHTML = '';
+        if (info.available_samples && info.available_samples.length > 0) {
+            info.available_samples.forEach(file => {
+                const li = document.createElement('li');
+                li.textContent = file;
+                sampleFileList.appendChild(li);
+            });
+        } else {
+            const li = document.createElement('li');
+            li.textContent = "(None found)";
+            li.className = "text-slate-500 italic";
+            sampleFileList.appendChild(li);
+        }
+
+        // Fetch Maya1 presets for the list
+        // Note: We do this separately to get the full list for the info panel
+        API.apiRequest('/api/voice_presets?engine=maya1', { method: 'GET' }).then(data => {
+             maya1PresetList.innerHTML = '';
+             data.presets.forEach(p => {
+                 const li = document.createElement('li');
+                 li.textContent = `${p.label} - ${p.prompt ? p.prompt.substring(0, 50) + "..." : "No prompt"}`;
+                 maya1PresetList.appendChild(li);
+             });
+        });
+    }
+
+    // Settings Modal Logic
+    function openSettings() {
+        // Set radio based on current setting
+        const engine = currentSettings.default_engine || "maya1";
+        document.querySelector(`input[name="engine"][value="${engine}"]`).checked = true;
+        updateSettingsPanels(engine);
+        settingsModal.classList.remove("hidden");
+    }
+
+    function closeSettings() {
+        settingsModal.classList.add("hidden");
+    }
+
+    function updateSettingsPanels(engine) {
+        if (engine === "maya1") {
+            maya1Details.classList.remove("hidden");
+            chatterboxDetails.classList.add("hidden");
+        } else {
+            maya1Details.classList.add("hidden");
+            chatterboxDetails.classList.remove("hidden");
+        }
+    }
+
+    settingsBtn.addEventListener("click", openSettings);
+    closeSettingsBtn.addEventListener("click", closeSettings);
+    cancelSettingsBtn.addEventListener("click", closeSettings);
+
+    engineRadios.forEach(radio => {
+        radio.addEventListener("change", (e) => {
+            updateSettingsPanels(e.target.value);
+        });
+    });
+
+    saveSettingsBtn.addEventListener("click", async () => {
+        const selectedEngine = document.querySelector('input[name="engine"]:checked').value;
+
+        try {
+            const data = await API.apiRequest('/api/settings', {
+                method: 'POST',
+                body: { default_engine: selectedEngine }
+            });
+
+            if (data.status === "updated") {
+                currentSettings.default_engine = selectedEngine;
+                await loadVoicePresets(selectedEngine);
+                logToConsole(`Settings saved. Engine set to ${selectedEngine}`, "success");
+                closeSettings();
+            } else if (data.error) {
+                alert(`Error saving settings: ${data.error}`);
+            }
+        } catch (error) {
+            logToConsole(`Failed to save settings: ${error}`, "error");
+        }
+    });
 
     // Function to load EPUB from filepath (used by both browse and manual entry)
     async function loadEpubFromPath(filepath) {
@@ -459,8 +580,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Load voice presets on startup
-    loadVoicePresets();
+    // Load settings on startup (which also loads voice presets)
+    loadSettings();
 
     logToConsole("System initialized. Ready for command...", "info");
 });
