@@ -496,7 +496,11 @@ def parse_epub(epub_path: str) -> tuple:
     import ebooklib
     from ebooklib import epub
     from bs4 import BeautifulSoup
+    from epub_validation import validate_epub_safe
     
+    # Security check for ZIP bombs
+    validate_epub_safe(epub_path)
+
     print(f"[EPUB] Reading: {epub_path}")
     book = epub.read_epub(epub_path)
     
