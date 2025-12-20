@@ -38,3 +38,4 @@ chatterbox-tts>=0.1.0
 
 # Optional: faster inference with vLLM
 # pip install vllm
+Flask-WTF

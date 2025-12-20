@@ -4,6 +4,7 @@ import threading
 import uuid
 import time
 from flask import Flask, jsonify, request, render_template, send_file, Response
+from flask_wtf.csrf import CSRFProtect
 from tkinter import filedialog
 import sys
 
@@ -16,6 +17,8 @@ from conversion_worker import run_conversion_job
 from voice_presets import DEFAULT_VOICE_PROMPT, VOICE_PRESETS, validate_voice_preset
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.config['SECRET_KEY'] = os.urandom(24)  # Generate a random secret key for session/CSRF
+csrf = CSRFProtect(app)
 
 # Global state
 epub_parser = None
@@ -49,6 +52,13 @@ def select_epub():
 
     if not filepath:
         return jsonify({"error": "No file selected."}), 400
+
+    # Sanitize filepath: must exist and end with .epub
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 400
+
+    if not filepath.lower().endswith('.epub'):
+        return jsonify({"error": "Invalid file type. Must be an EPUB file."}), 400
 
     global epub_parser, cover_image_path
     try:
@@ -324,6 +334,5 @@ def events():
     return response
 
 if __name__ == "__main__":
-    # Bind to 0.0.0.0 to allow remote connections for testing
-    # WARNING: Only use this on trusted networks! For production, use a proper WSGI server with authentication
-    app.run(host='0.0.0.0', port=5000, threaded=True)  # Enable threading for concurrent requests
+    # Bind to 127.0.0.1 for local access only, improving security
+    app.run(host='127.0.0.1', port=5000, threaded=True)  # Enable threading for concurrent requests
