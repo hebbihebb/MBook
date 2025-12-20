@@ -15,6 +15,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from epub_validation import validate_epub_safe
+
 
 @dataclass
 class Chapter:
@@ -104,6 +106,9 @@ def parse_epub_with_chapters(epub_path: str) -> ParsedEpub:
     Returns:
         ParsedEpub object containing metadata and ordered chapters
     """
+    # Security check for ZIP bombs
+    validate_epub_safe(epub_path)
+
     book = epub.read_epub(epub_path)
     
     # Extract metadata

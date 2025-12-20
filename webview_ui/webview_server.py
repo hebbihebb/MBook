@@ -3,7 +3,9 @@ import json
 import threading
 import uuid
 import time
+from werkzeug.utils import secure_filename
 from flask import Flask, jsonify, request, render_template, send_file, Response
+from flask_wtf.csrf import CSRFProtect
 from tkinter import filedialog
 import sys
 
@@ -22,8 +24,13 @@ from voice_presets import (
     get_available_voice_samples
 )
 from config_manager import ConfigManager
+from voice_presets import DEFAULT_VOICE_PROMPT, VOICE_PRESETS, validate_voice_preset
+from webview_ui.temp_config import UPLOAD_FOLDER, OUTPUT_ROOT, allowed_file, ALLOWED_EXTENSIONS
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['SECRET_KEY'] = os.urandom(24)  # Generate a random secret key for session/CSRF
+csrf = CSRFProtect(app)
 
 # Initialize config manager
 config_manager = ConfigManager()
@@ -39,6 +46,52 @@ state_lock = threading.Lock()
 def index():
     """Render the main HTML page."""
     return render_template("index.html")
+
+@app.route("/api/upload_epub", methods=["POST"])
+def upload_epub():
+    """Handle file upload via drag-and-drop."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        # Ensure unique filename to prevent collisions
+        unique_filename = f"{uuid.uuid4()}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(filepath)
+
+        return jsonify({
+            "message": "File uploaded successfully",
+            "filepath": filepath,
+            "filename": filename
+        })
+    else:
+        return jsonify({"error": "Invalid file type. Only EPUB allowed."}), 400
+
+@app.route("/api/get_output_dirs", methods=["GET"])
+def get_output_dirs():
+    """Return a list of allowed output directories."""
+    # List directories in the OUTPUT_ROOT
+    dirs = []
+
+    # Always add the root output folder
+    dirs.append(OUTPUT_ROOT)
+
+    # Add immediate subdirectories
+    try:
+        with os.scandir(OUTPUT_ROOT) as entries:
+            for entry in entries:
+                if entry.is_dir():
+                    dirs.append(entry.path)
+    except Exception as e:
+        print(f"Error scanning output directory: {e}")
+
+    return jsonify({"dirs": dirs})
 
 @app.route("/api/select_epub", methods=["POST"])
 def select_epub():
@@ -60,6 +113,13 @@ def select_epub():
 
     if not filepath:
         return jsonify({"error": "No file selected."}), 400
+
+    # Sanitize filepath: must exist and end with .epub
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 400
+
+    if not filepath.lower().endswith('.epub'):
+        return jsonify({"error": "Invalid file type. Must be an EPUB file."}), 400
 
     global epub_parser, cover_image_path
     try:
@@ -376,6 +436,11 @@ def events():
     return response
 
 if __name__ == "__main__":
-    # Bind to 0.0.0.0 to allow remote connections for testing
-    # WARNING: Only use this on trusted networks! For production, use a proper WSGI server with authentication
-    app.run(host='0.0.0.0', port=5000, threaded=True)  # Enable threading for concurrent requests
+    import argparse
+    parser = argparse.ArgumentParser(description="MBook Webview Server")
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=5000, help="Port to bind to")
+    args = parser.parse_args()
+
+    # Bind to the specified host (defaulting to 127.0.0.1 for security)
+    app.run(host=args.host, port=args.port, threaded=True)  # Enable threading for concurrent requests

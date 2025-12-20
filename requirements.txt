@@ -3,38 +3,40 @@
 
 # PyTorch (install separately for CUDA support)
 # pip install torch --index-url https://download.pytorch.org/whl/cu121
-torch
+torch==2.9.1
 
 # Transformers and model loading
-transformers
-accelerate
-huggingface_hub
+transformers==4.57.3
+accelerate==1.12.0
+huggingface_hub==0.36.0
 
 # SNAC audio codec
-snac
+snac==1.2.1
 
 # EPUB parsing
-ebooklib
-beautifulsoup4
+ebooklib==0.20
+beautifulsoup4==4.14.3
 
 # Audio processing
-pydub
-soundfile
-scipy
+pydub==0.25.1
+soundfile==0.13.1
+scipy==1.16.3
 
 # Text processing
-spacy
-num2words
+spacy==3.8.11
+num2words==0.5.14
 
 # GUI (optional)
-ttkbootstrap
-Flask
+ttkbootstrap==1.19.2
+Flask==3.1.2
 
 # Utilities
-numpy
+numpy==2.3.5
 
 # Optional: Chatterbox Turbo TTS (alternative to Maya1)
-chatterbox-tts>=0.1.0
+# Note: Chatterbox TTS currently requires numpy<1.26 which is incompatible with Python 3.12
+# chatterbox-tts>=0.1.0
 
 # Optional: faster inference with vLLM
 # pip install vllm
+Flask-WTF
