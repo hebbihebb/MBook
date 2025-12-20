@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const pauseBtn = document.getElementById("pause-btn");
     const cancelBtn = document.getElementById("cancel-btn");
     const consoleOutput = document.getElementById("console-output");
-    const voiceSelect = document.querySelector(".terminal-select");
+    const voiceSelect = document.getElementById("voice-select");
 
     // Settings Elements
     const settingsBtn = document.getElementById("settings-btn");
@@ -323,7 +323,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Drag and Drop handlers
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        epubDropZone.addEventListener(eventName, preventDefaults, false);
+        document.addEventListener(eventName, preventDefaults, false);
     });
 
     function preventDefaults(e) {
@@ -332,11 +332,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     ['dragenter', 'dragover'].forEach(eventName => {
-        epubDropZone.addEventListener(eventName, highlight, false);
+        document.addEventListener(eventName, highlight, false);
     });
 
     ['dragleave', 'drop'].forEach(eventName => {
-        epubDropZone.addEventListener(eventName, unhighlight, false);
+        document.addEventListener(eventName, unhighlight, false);
     });
 
     function highlight(e) {
@@ -347,7 +347,7 @@ document.addEventListener("DOMContentLoaded", () => {
         epubDropZone.classList.remove('drag-over');
     }
 
-    epubDropZone.addEventListener('drop', handleDrop, false);
+    document.addEventListener('drop', handleDrop, false);
 
     async function handleDrop(e) {
         const dt = e.dataTransfer;
@@ -706,8 +706,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Load settings on startup (which also loads voice presets)
     loadSettings();
-    // Load voice presets on startup
-    loadVoicePresets();
     loadOutputDirs();
 
     logToConsole("System initialized. Ready for command...", "info");
