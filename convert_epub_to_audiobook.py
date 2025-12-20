@@ -197,6 +197,8 @@ class Maya1TTSEngine:
     
     def build_prompt(self, description: str, text: str) -> str:
         """Build formatted prompt for Maya1 TTS."""
+        from xml.sax.saxutils import escape
+
         soh_token = self.tokenizer.decode([SOH_ID])
         eoh_token = self.tokenizer.decode([EOH_ID])
         soa_token = self.tokenizer.decode([SOA_ID])
@@ -204,7 +206,9 @@ class Maya1TTSEngine:
         eot_token = self.tokenizer.decode([TEXT_EOT_ID])
         bos_token = self.tokenizer.bos_token
         
-        formatted_text = f'<description="{description}"> {text}'
+        # Escape description to prevent prompt injection
+        escaped_description = escape(description, {'"': "&quot;"})
+        formatted_text = f'<description="{escaped_description}"> {text}'
         
         prompt = (
             soh_token + bos_token + formatted_text + eot_token +
