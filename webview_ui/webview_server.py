@@ -35,6 +35,10 @@ csrf = CSRFProtect(app)
 # Initialize config manager
 config_manager = ConfigManager()
 
+# Load HF token from config if saved (for Chatterbox)
+if config_manager.get_hf_token():
+    os.environ["HF_TOKEN"] = config_manager.get_hf_token()
+
 # Global state
 epub_parser = None
 cover_image_path = None
@@ -333,17 +337,30 @@ def settings_endpoint():
         try:
             if "default_engine" in data:
                 config_manager.set_default_engine(data["default_engine"])
-
-            # Can add other settings updates here
+            
+            if "hf_token" in data:
+                token = data["hf_token"]
+                if token:  # Only save if not empty
+                    config_manager.set_hf_token(token)
+                    # Also set as environment variable for current session
+                    import os
+                    os.environ["HF_TOKEN"] = token
 
             return jsonify({"status": "updated", "config": config_manager._config})
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
 
-    # GET request
+    # GET request - mask the token for security
+    hf_token = config_manager.get_hf_token()
+    masked_token = ""
+    if hf_token:
+        masked_token = hf_token[:6] + "..." + hf_token[-4:] if len(hf_token) > 10 else "****"
+    
     return jsonify({
         "config": config_manager._config,
         "default_engine": config_manager.get_default_engine(),
+        "hf_token_set": bool(hf_token),
+        "hf_token_masked": masked_token,
         "info": {
             "voice_samples_dir": get_voice_samples_dir(),
             "available_samples": get_available_voice_samples()

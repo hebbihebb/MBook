@@ -67,7 +67,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const globalDropZone = document.getElementById("global-drop-zone");
     let dragCounter = 0;
 
-    // Settings Elements
     const settingsBtn = document.getElementById("settings-btn");
     const settingsModal = document.getElementById("settings-modal");
     const closeSettingsBtn = document.getElementById("close-settings");
@@ -79,6 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const samplesDirPath = document.getElementById("samples-dir-path");
     const sampleFileList = document.getElementById("sample-file-list");
     const engineRadios = document.querySelectorAll('input[name="engine"]');
+    const hfTokenInput = document.getElementById("hf-token-input");
 
     const bookTitleInfo = document.getElementById("book-title-info");
     const bookCoverText = document.getElementById("book-cover-text");
@@ -149,6 +149,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (data.info) {
                     populateSettingsInfo(data.info);
                 }
+
+                // Show masked HF token if set
+                if (hfTokenInput && data.hf_token_set) {
+                    hfTokenInput.placeholder = `Token set (${data.hf_token_masked})`;
+                }
             }
         } catch (error) {
             logToConsole(`Failed to load settings: ${error}`, "error");
@@ -175,12 +180,12 @@ document.addEventListener("DOMContentLoaded", () => {
         // Fetch Maya1 presets for the list
         // Note: We do this separately to get the full list for the info panel
         API.apiRequest('/api/voice_presets?engine=maya1', { method: 'GET' }).then(data => {
-             maya1PresetList.innerHTML = '';
-             data.presets.forEach(p => {
-                 const li = document.createElement('li');
-                 li.textContent = `${p.label} - ${p.prompt ? p.prompt.substring(0, 50) + "..." : "No prompt"}`;
-                 maya1PresetList.appendChild(li);
-             });
+            maya1PresetList.innerHTML = '';
+            data.presets.forEach(p => {
+                const li = document.createElement('li');
+                li.textContent = `${p.label} - ${p.prompt ? p.prompt.substring(0, 50) + "..." : "No prompt"}`;
+                maya1PresetList.appendChild(li);
+            });
         });
     }
 
@@ -219,16 +224,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     saveSettingsBtn.addEventListener("click", async () => {
         const selectedEngine = document.querySelector('input[name="engine"]:checked').value;
+        const hfToken = hfTokenInput ? hfTokenInput.value.trim() : "";
 
         try {
+            const requestBody = { default_engine: selectedEngine };
+            if (hfToken) {
+                requestBody.hf_token = hfToken;
+            }
+
             const data = await API.apiRequest('/api/settings', {
                 method: 'POST',
-                body: { default_engine: selectedEngine }
+                body: requestBody
             });
 
             if (data.status === "updated") {
                 currentSettings.default_engine = selectedEngine;
                 await loadVoicePresets(selectedEngine);
+
+                // Update placeholder if token was saved
+                if (hfToken && hfTokenInput) {
+                    hfTokenInput.value = "";
+                    hfTokenInput.placeholder = `Token saved (hf_${hfToken.slice(3, 7)}...)`;
+                }
+
                 logToConsole(`Settings saved. Engine set to ${selectedEngine}`, "success");
                 closeSettings();
             } else if (data.error) {
@@ -722,5 +740,14 @@ document.addEventListener("DOMContentLoaded", () => {
     loadSettings();
     loadOutputDirs();
 
+    // Hide browse buttons in browser mode (they only work in Electron)
+    if (!window.electronAPI) {
+        browseEpubBtn.classList.add("hidden");
+        // Note: browseOutputBtn is already hidden by loadOutputDirs() when server dirs are available
+    }
+
     logToConsole("System initialized. Ready for command...", "info");
+    if (!window.electronAPI) {
+        logToConsole("Browser mode: Use drag-and-drop for EPUB files", "info");
+    }
 });

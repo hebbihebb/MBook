@@ -55,3 +55,11 @@ class ConfigManager:
         if engine not in ["maya1", "chatterbox"]:
             raise ValueError(f"Invalid engine: {engine}")
         self.set("default_engine", engine)
+
+    def get_hf_token(self) -> Optional[str]:
+        """Get the HuggingFace token."""
+        return self._config.get("hf_token")
+
+    def set_hf_token(self, token: str) -> None:
+        """Set the HuggingFace token."""
+        self.set("hf_token", token)

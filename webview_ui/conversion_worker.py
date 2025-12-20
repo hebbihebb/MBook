@@ -135,8 +135,10 @@ def run_conversion_job(
             from chatterbox_engine import ChatterboxTurboEngine
 
             state.add_log("Loading Chatterbox Turbo...")
+            state.update_progress(6, "Loading Chatterbox Turbo model...")
             engine = ChatterboxTurboEngine(device=device)
             engine.load()
+            state.update_progress(9, "Chatterbox Turbo ready")
             sample_rate = 22050  # Chatterbox outputs 22.05kHz
             reference_audio = preset["reference_audio"]
 
@@ -145,8 +147,10 @@ def run_conversion_job(
         else:  # maya1 (default)
             # Load Maya1 engine
             state.add_log("Loading Maya1...")
+            state.update_progress(6, "Loading Maya1 model...")
             engine = Maya1TTSEngine(LOCAL_MODEL_DIR, device)
             engine.load()
+            state.update_progress(9, "Maya1 ready")
             sample_rate = 24000  # Maya1 outputs 24kHz
             voice_prompt = preset["prompt"]
 

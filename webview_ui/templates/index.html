@@ -48,6 +48,7 @@
             transition: all 0.2s ease-in-out;
             border: 1px dashed transparent;
         }
+
         .drop-zone.drag-over {
             border-color: #10b981;
             background-color: rgba(16, 185, 129, 0.1);
@@ -132,15 +133,17 @@
             <span class="text-xs text-slate-500">_</span>
         </div>
         <div class="flex items-center gap-2">
-            <button class="p-1 rounded-none hover:bg-slate-700 text-slate-400 transition-colors" title="Settings" id="settings-btn">
+            <button class="p-1 rounded-none hover:bg-slate-700 text-slate-400 transition-colors" title="Settings"
+                id="settings-btn">
                 <span class="material-symbols-outlined text-sm">settings</span>
             </button>
         </div>
     </header>
 
     <!-- Global Drop Zone Overlay -->
-    <div id="global-drop-zone" class="fixed inset-0 bg-primary/20 border-4 border-dashed border-primary z-[60] hidden flex items-center justify-center pointer-events-none">
-        <div class="bg-background-dark p-8 border border-primary shadow-2xl text-center pointer-events-auto">
+    <div id="global-drop-zone"
+        class="fixed inset-0 bg-primary/20 border-4 border-dashed border-primary z-[60] hidden flex items-center justify-center">
+        <div class="bg-background-dark p-8 border border-primary shadow-2xl text-center">
             <span class="material-symbols-outlined text-primary text-6xl mb-4">upload_file</span>
             <h2 class="text-2xl font-bold text-primary uppercase">Drop EPUB file to upload</h2>
             <p class="text-slate-400 mt-2 font-mono">Release to start processing</p>
@@ -152,9 +155,11 @@
             <div class="p-4 pb-2 space-y-3 shrink-0">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div class="space-y-1 drop-zone p-1 -m-1" id="epub-drop-zone">
-                        <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">EPUB_PATH <span class="text-xs text-slate-600 normal-case">(Drag & Drop supported)</span></label>
+                        <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">EPUB_PATH <span
+                                class="text-xs text-slate-600 normal-case">(Drag & Drop supported)</span></label>
                         <div class="flex relative">
-                            <div id="upload-overlay" class="absolute inset-0 bg-surface-dark/90 z-10 flex items-center justify-center hidden">
+                            <div id="upload-overlay"
+                                class="absolute inset-0 bg-surface-dark/90 z-10 flex items-center justify-center hidden">
                                 <span class="text-primary text-xs font-bold animate-pulse">UPLOADING...</span>
                             </div>
                             <input
@@ -299,8 +304,7 @@
         <div class="flex items-center gap-3 mb-3">
             <div class="flex items-center gap-2 w-full max-w-xs">
                 <span class="material-symbols-outlined text-slate-400 text-sm">record_voice_over</span>
-                <select
-                    id="voice-select"
+                <select id="voice-select"
                     class="terminal-select block w-full pl-3 pr-8 py-1 text-sm border-border-dark bg-slate-900 rounded-none focus:outline-none focus:ring-primary focus:border-primary text-slate-300">
                     <option>EN-US NEURAL (F)</option>
                     <option>EN-US NEURAL (M)</option>
@@ -332,6 +336,92 @@
             id="console-output">
         </div>
     </footer>
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/70 z-[70] hidden flex items-center justify-center">
+        <div class="bg-surface-dark border border-border-dark shadow-2xl w-full max-w-lg mx-4">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-4 py-3 border-b border-border-dark bg-background-dark">
+                <h2 class="text-sm font-bold text-primary uppercase flex items-center gap-2">
+                    <span class="material-symbols-outlined text-base">settings</span>
+                    SETTINGS
+                </h2>
+                <button id="close-settings" class="text-slate-400 hover:text-white transition-colors">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="p-4 space-y-4">
+                <!-- Engine Selection -->
+                <div class="space-y-2">
+                    <label class="text-xs uppercase tracking-wide text-slate-500">TTS ENGINE</label>
+                    <div class="flex gap-4">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="engine" value="maya1" class="accent-primary" checked />
+                            <span class="text-sm text-slate-300">Maya1</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="engine" value="chatterbox" class="accent-primary" />
+                            <span class="text-sm text-slate-300">Chatterbox Turbo</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Maya1 Details Panel -->
+                <div id="maya1-details" class="space-y-2 p-3 bg-background-dark border border-border-dark">
+                    <h4 class="text-xs uppercase tracking-wide text-primary">MAYA1 ENGINE</h4>
+                    <p class="text-xs text-slate-400">High-quality neural TTS with voice prompts</p>
+                    <div class="mt-2">
+                        <p class="text-xs text-slate-500 uppercase mb-1">Available Presets:</p>
+                        <ul id="maya1-preset-list" class="text-xs text-slate-300 space-y-1 max-h-24 overflow-y-auto">
+                            <li class="text-slate-500 italic">Loading...</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Chatterbox Details Panel -->
+                <div id="chatterbox-details" class="space-y-2 p-3 bg-background-dark border border-border-dark hidden">
+                    <h4 class="text-xs uppercase tracking-wide text-primary">CHATTERBOX TURBO</h4>
+                    <p class="text-xs text-slate-400">Zero-shot voice cloning with reference audio</p>
+
+                    <!-- HuggingFace Token -->
+                    <div class="mt-3">
+                        <label class="text-xs text-slate-500 uppercase mb-1 block">HuggingFace Token (required):</label>
+                        <input type="password" id="hf-token-input"
+                            class="w-full bg-surface-dark border border-border-dark text-slate-300 text-xs px-2 py-1.5 font-mono focus:border-primary focus:outline-none"
+                            placeholder="hf_xxxxxxxxxx..." />
+                        <p class="text-[10px] text-slate-500 mt-1">Get token from <a
+                                href="https://huggingface.co/settings/tokens" target="_blank"
+                                class="text-primary hover:underline">huggingface.co/settings/tokens</a></p>
+                    </div>
+
+                    <div class="mt-2">
+                        <p class="text-xs text-slate-500 uppercase mb-1">Voice Samples Directory:</p>
+                        <p id="samples-dir-path" class="text-xs text-slate-300 font-mono truncate">Loading...</p>
+                    </div>
+                    <div class="mt-2">
+                        <p class="text-xs text-slate-500 uppercase mb-1">Available Samples:</p>
+                        <ul id="sample-file-list" class="text-xs text-slate-300 space-y-1 max-h-24 overflow-y-auto">
+                            <li class="text-slate-500 italic">Loading...</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="flex justify-end gap-2 px-4 py-3 border-t border-border-dark bg-background-dark">
+                <button id="cancel-settings"
+                    class="px-3 py-1.5 text-xs uppercase text-slate-400 hover:text-white border border-border-dark hover:border-slate-500 transition-colors">
+                    Cancel
+                </button>
+                <button id="save-settings"
+                    class="px-3 py-1.5 text-xs uppercase text-background-dark bg-primary hover:bg-primary-hover font-bold transition-colors">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="../static/main.js"></script>
 </body>
 

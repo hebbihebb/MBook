@@ -110,11 +110,21 @@ def validate_voice_preset(voice_id: str) -> Dict[str, str]:
         ref_path = preset.get("reference_audio")
         if not ref_path:
             raise ValueError(f"Chatterbox preset {voice_id} missing reference_audio field")
+        
+        # Resolve relative path from project root (where voice_presets.py is located)
+        if not os.path.isabs(ref_path):
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            ref_path = os.path.join(base_dir, ref_path)
+        
         if not os.path.exists(ref_path):
             raise FileNotFoundError(
                 f"Reference audio missing: {ref_path}\n"
                 f"Please ensure voice samples are in voice_samples/ directory.\n"
                 f"Run: python generate_voice_samples.py"
             )
+        
+        # Return preset with absolute path
+        preset = preset.copy()
+        preset["reference_audio"] = ref_path
 
     return preset
