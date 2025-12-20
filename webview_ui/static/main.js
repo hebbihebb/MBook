@@ -370,12 +370,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const formData = new FormData();
         formData.append('file', file);
 
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const headers = {};
+        if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+
         try {
             logToConsole(`Uploading ${file.name}...`, "info");
 
             // Use fetch directly for file upload since it's multipart/form-data
             const response = await fetch('/api/upload_epub', {
                 method: 'POST',
+                headers: headers,
                 body: formData
             });
 
@@ -494,8 +502,8 @@ document.addEventListener("DOMContentLoaded", () => {
         bookTitleInfo.textContent = data.title;
         bookCoverText.textContent = data.title;
         if (data.cover_image) {
-            // Add timestamp to bust cache and prepend server URL
-            bookCoverImg.src = `http://127.0.0.1:5000${data.cover_image}?t=${new Date().getTime()}`;
+            // Add timestamp to bust cache and use current origin for remote access
+            bookCoverImg.src = `${window.location.origin}${data.cover_image}?t=${new Date().getTime()}`;
             bookCoverImg.classList.add("opacity-100");
         }
         bookAuthor.textContent = data.author;
