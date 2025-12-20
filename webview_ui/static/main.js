@@ -63,6 +63,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const consoleOutput = document.getElementById("console-output");
     const voiceSelect = document.getElementById("voice-select");
 
+    // Global Drop Zone
+    const globalDropZone = document.getElementById("global-drop-zone");
+    let dragCounter = 0;
+
     // Settings Elements
     const settingsBtn = document.getElementById("settings-btn");
     const settingsModal = document.getElementById("settings-modal");
@@ -322,32 +326,34 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Drag and Drop handlers
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        document.addEventListener(eventName, preventDefaults, false);
-    });
-
-    function preventDefaults(e) {
+    window.addEventListener('dragenter', (e) => {
         e.preventDefault();
         e.stopPropagation();
-    }
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        document.addEventListener(eventName, highlight, false);
+        dragCounter++;
+        globalDropZone.classList.remove('hidden');
     });
 
-    ['dragleave', 'drop'].forEach(eventName => {
-        document.addEventListener(eventName, unhighlight, false);
+    window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter--;
+        if (dragCounter === 0) {
+            globalDropZone.classList.add('hidden');
+        }
     });
 
-    function highlight(e) {
-        epubDropZone.classList.add('drag-over');
-    }
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
 
-    function unhighlight(e) {
-        epubDropZone.classList.remove('drag-over');
-    }
-
-    document.addEventListener('drop', handleDrop, false);
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter = 0;
+        globalDropZone.classList.add('hidden');
+        handleDrop(e);
+    });
 
     async function handleDrop(e) {
         const dt = e.dataTransfer;
