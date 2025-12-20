@@ -30,6 +30,7 @@ Usage:
 
 import os
 import numpy as np
+from xml.sax.saxutils import escape
 from typing import List, Optional, Union
 
 # Check for lmdeploy availability
@@ -227,7 +228,9 @@ class FastMaya1Engine:
     
     def _format_prompt(self, text: str, voice: str) -> str:
         """Format the prompt for Maya1."""
-        return f'<custom_token_3><|begin_of_text|><description="{voice}"> {text}<|eot_id|><custom_token_4><custom_token_5><custom_token_1>'
+        # Escape voice description to prevent prompt injection
+        escaped_voice = escape(voice, {'"': "&quot;"})
+        return f'<custom_token_3><|begin_of_text|><description="{escaped_voice}"> {text}<|eot_id|><custom_token_4><custom_token_5><custom_token_1>'
     
     def _extract_snac_codes(self, token_ids: list) -> list:
         """Extract SNAC codes from generated tokens."""
