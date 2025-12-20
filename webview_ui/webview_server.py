@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from epub_parser import EpubParser
 from conversion_state import ConversionState
 from conversion_worker import run_conversion_job
+from voice_presets import DEFAULT_VOICE_PROMPT, VOICE_PRESETS, validate_voice_preset
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
@@ -22,98 +23,6 @@ cover_image_path = None
 conversion_state = None
 state_lock = threading.Lock()
 
-# Default voice prompt
-DEFAULT_VOICE_PROMPT = "Male narrator voice in his 40s with an American accent. Warm baritone, calm pacing, clear diction, conversational delivery."
-
-# Voice presets
-VOICE_PRESETS = [
-    # Maya1 presets (natural language voice descriptions)
-    {
-        "id": "male_us_warm",
-        "label": "EN-US NEURAL (M)",
-        "engine": "maya1",
-        "prompt": "Male narrator voice in his 40s with an American accent. Warm baritone, calm pacing, clear diction, conversational delivery."
-    },
-    {
-        "id": "female_us_clear",
-        "label": "EN-US NEURAL (F)",
-        "engine": "maya1",
-        "prompt": "Female narrator voice in her 30s with an American accent. Professional, clear articulation, warm and engaging tone."
-    },
-    {
-        "id": "male_uk_classic",
-        "label": "EN-GB STANDARD",
-        "engine": "maya1",
-        "prompt": "Male narrator voice with a British accent in his 40s. Classic BBC style, authoritative and refined tone, measured pacing."
-    },
-    # Chatterbox Turbo presets (voice cloning via reference audio)
-    {
-        "id": "chatterbox_male_us",
-        "label": "EN-US CHATTERBOX (M)",
-        "engine": "chatterbox",
-        "reference_audio": "voice_samples/en_us_male_warm.wav"
-    },
-    {
-        "id": "chatterbox_female_us",
-        "label": "EN-US CHATTERBOX (F)",
-        "engine": "chatterbox",
-        "reference_audio": "voice_samples/en_us_female_clear.wav"
-    },
-    {
-        "id": "chatterbox_male_gb",
-        "label": "EN-GB CHATTERBOX",
-        "engine": "chatterbox",
-        "reference_audio": "voice_samples/en_gb_male_standard.wav"
-    },
-    # Custom narrator voices
-    {
-        "id": "chatterbox_ks",
-        "label": "KAREN SAVAGE (F)",
-        "engine": "chatterbox",
-        "reference_audio": "voice_samples/KS_FEMALE_22k.wav"
-    },
-    {
-        "id": "chatterbox_sj",
-        "label": "SCARLETT J (F)",
-        "engine": "chatterbox",
-        "reference_audio": "voice_samples/SJ_FEMALE_22k.wav"
-    }
-]
-
-
-def validate_voice_preset(voice_id: str) -> dict:
-    """Get voice preset configuration and validate resources.
-
-    Args:
-        voice_id: Voice preset ID to validate
-
-    Returns:
-        Validated voice preset configuration dictionary
-
-    Raises:
-        ValueError: If preset ID is unknown
-        FileNotFoundError: If Chatterbox reference audio file is missing
-    """
-    # Find preset by ID
-    preset = next((p for p in VOICE_PRESETS if p["id"] == voice_id), None)
-    if not preset:
-        raise ValueError(f"Unknown voice preset: {voice_id}")
-
-    # Validate Chatterbox reference audio exists
-    if preset.get("engine") == "chatterbox":
-        ref_path = preset.get("reference_audio")
-        if not ref_path:
-            raise ValueError(f"Chatterbox preset {voice_id} missing reference_audio field")
-
-        # Check if reference audio file exists
-        if not os.path.exists(ref_path):
-            raise FileNotFoundError(
-                f"Reference audio missing: {ref_path}\n"
-                f"Please ensure voice samples are in voice_samples/ directory.\n"
-                f"Run: python generate_voice_samples.py"
-            )
-
-    return preset
 
 @app.route("/")
 def index():

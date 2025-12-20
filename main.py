@@ -18,6 +18,7 @@ from ttkbootstrap.widgets.scrolled import ScrolledText
 import threading
 import os
 import time
+import json
 from datetime import datetime, timedelta
 from PIL import Image, ImageTk
 from io import BytesIO
@@ -29,8 +30,20 @@ try:
         ConversionProgress, save_progress, load_progress,
         has_resumable_job, get_resumable_info, cleanup_progress, cleanup_temp_chunks
     )
+    from voice_presets import (
+        DEFAULT_VOICE_PROMPT as DEFAULT_VOICE_PROMPT_TEXT,
+        VOICE_PRESETS,
+        get_voice_preset,
+        validate_voice_preset,
+    )
 except ImportError as e:
     print(f"Warning: Missing dependencies: {e}")
+    DEFAULT_VOICE_PROMPT_TEXT = ""
+    VOICE_PRESETS = []
+    def get_voice_preset(_voice_id: str) -> dict:
+        raise ValueError("Voice presets unavailable")
+    def validate_voice_preset(_voice_id: str) -> dict:
+        raise ValueError("Voice presets unavailable")
 
 # Check for optional batch processing support
 # NOTE: Batch mode is DISABLED as of 2024-12-10
@@ -119,11 +132,10 @@ class VoicePromptDialog(tk.Toplevel):
 
 class AudiobookApp(ttk.Window):
     """Main application window."""
+
+    SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".mbook_settings.json")
     
-    DEFAULT_VOICE_PROMPT = (
-        "Male narrator voice in his 40s with an American accent. "
-        "Warm baritone, calm pacing, clear diction, conversational delivery."
-    )
+    DEFAULT_VOICE_PROMPT = DEFAULT_VOICE_PROMPT_TEXT
     
     def __init__(self):
         super().__init__(themename="darkly")
@@ -138,6 +150,8 @@ class AudiobookApp(ttk.Window):
         self.progress_var = tk.DoubleVar(value=0)
         self.elapsed_var = tk.StringVar(value="00:00:00")
         self.remaining_var = tk.StringVar(value="--:--:--")
+        self.progress_detail_var = tk.StringVar(value="Idle")
+        self.chunk_progress_var = tk.StringVar(value="0 / 0")
         
         # New: Selection info string
         self.info_selected_var = tk.StringVar(value="0 selected")
@@ -149,6 +163,11 @@ class AudiobookApp(ttk.Window):
         
         # Conversion state
         self.voice_prompt = self.DEFAULT_VOICE_PROMPT
+        self.voice_preset_id = tk.StringVar()
+        self.voice_detail_label_var = tk.StringVar(value="Voice Prompt:")
+        self.voice_detail_var = tk.StringVar(value="")
+        self.reference_audio_var = tk.StringVar(value="")
+        self.reference_audio_custom = False
         self.conversion_thread = None
         self.cancel_event = threading.Event()
         self.pause_event = threading.Event()
@@ -165,6 +184,9 @@ class AudiobookApp(ttk.Window):
         self.batch_size_var = tk.IntVar(value=4)  # Process 4 chunks at a time
         
         self.create_widgets()
+        self.init_voice_presets()
+        self.load_settings()
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
         
     def create_widgets(self):
         """Build the complete GUI layout."""
@@ -199,6 +221,29 @@ class AudiobookApp(ttk.Window):
         ttk.Label(setup_frame, text="Output Folder:", font=("Segoe UI", 10)).grid(row=1, column=0, sticky=W, pady=5)
         ttk.Entry(setup_frame, textvariable=self.output_dir).grid(row=1, column=1, sticky=EW, padx=10, pady=5)
         ttk.Button(setup_frame, text="📂 Browse", command=self.browse_output_dir, bootstyle="secondary-outline").grid(row=1, column=2, padx=5)
+
+        # Row 2: Voice Preset
+        ttk.Label(setup_frame, text="Voice Preset:", font=("Segoe UI", 10)).grid(row=2, column=0, sticky=W, pady=5)
+        self.voice_preset_combo = ttk.Combobox(setup_frame, state="readonly")
+        self.voice_preset_combo.grid(row=2, column=1, sticky=EW, padx=10, pady=5)
+        self.btn_voice_edit = ttk.Button(
+            setup_frame,
+            text="✎ Edit Prompt",
+            command=self.edit_voice_prompt,
+            bootstyle="info-outline"
+        )
+        self.btn_voice_edit.grid(row=2, column=2, padx=5)
+
+        # Row 3: Voice Details
+        ttk.Label(setup_frame, textvariable=self.voice_detail_label_var, font=("Segoe UI", 10)).grid(row=3, column=0, sticky=W, pady=5)
+        ttk.Entry(setup_frame, textvariable=self.voice_detail_var, state="readonly").grid(row=3, column=1, sticky=EW, padx=10, pady=5)
+        self.btn_reference_browse = ttk.Button(
+            setup_frame,
+            text="🎧 Browse",
+            command=self.browse_reference_audio,
+            bootstyle="secondary-outline"
+        )
+        self.btn_reference_browse.grid(row=3, column=2, padx=5)
         
         # ===== MAIN CONTENT =====
         # Split view: Chapters (Left) vs Details (Right)
@@ -308,6 +353,11 @@ class AudiobookApp(ttk.Window):
         # The Bar
         self.progressbar = ttk.Progressbar(progress_frame, variable=self.progress_var, maximum=100, bootstyle="striped-success", length=200)
         self.progressbar.pack(fill=X)
+
+        detail_row = ttk.Frame(progress_frame)
+        detail_row.pack(fill=X, pady=(4, 0))
+        ttk.Label(detail_row, textvariable=self.progress_detail_var, font=("Segoe UI", 9), bootstyle="secondary").pack(side=LEFT)
+        ttk.Label(detail_row, textvariable=self.chunk_progress_var, font=("Segoe UI", 9), bootstyle="secondary").pack(side=RIGHT)
         
         # Bottom Row: Buttons
         btn_frame = ttk.Frame(control_panel)
@@ -326,10 +376,6 @@ class AudiobookApp(ttk.Window):
         self.btn_cancel = ttk.Button(btn_frame, text="⏹ Cancel", command=self.cancel_conversion, state=DISABLED, bootstyle="danger-outline", width=10)
         self.btn_cancel.pack(side=LEFT, padx=5)
         
-        # Voice Settings (Right aligned)
-        self.btn_voice = ttk.Button(btn_frame, text="🎙 Voice Settings", command=self.edit_voice_prompt, bootstyle="info-outline")
-        self.btn_voice.pack(side=RIGHT)
-        
         # Batch mode checkbox (only show if lmdeploy available)
         if BATCH_MODE_AVAILABLE:
             self.chk_batch = ttk.Checkbutton(
@@ -346,6 +392,11 @@ class AudiobookApp(ttk.Window):
         # ===== LOG PANEL =====
         self.log_expander = ttk.Labelframe(self, text="Log Output", padding=5)
         self.log_expander.pack(fill=X, padx=20, pady=(0, 20))
+
+        log_controls = ttk.Frame(self.log_expander)
+        log_controls.pack(fill=X, padx=5, pady=(0, 5))
+        ttk.Button(log_controls, text="📋 Copy Log", command=self.copy_log, bootstyle="secondary-outline").pack(side=LEFT)
+        ttk.Button(log_controls, text="📂 Open Output Folder", command=self.open_output_folder, bootstyle="secondary-outline").pack(side=LEFT, padx=5)
         
         self.log_text = ScrolledText(self.log_expander, height=6, wrap=tk.WORD, autohide=True, font=("Consolas", 8))
         self.log_text.pack(fill=X)
@@ -365,6 +416,59 @@ class AudiobookApp(ttk.Window):
         if path:
             self.output_dir.set(path)
             self.check_resume()
+
+    def load_settings(self):
+        """Load persisted UI settings."""
+        if not os.path.exists(self.SETTINGS_PATH):
+            return
+        try:
+            with open(self.SETTINGS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return
+
+        epub_path = data.get("epub_path")
+        if epub_path and os.path.exists(epub_path):
+            self.epub_path.set(epub_path)
+            self.load_epub(epub_path)
+
+        output_dir = data.get("output_dir")
+        if output_dir and os.path.isdir(output_dir):
+            self.output_dir.set(output_dir)
+
+        self.voice_prompt = data.get("voice_prompt", self.voice_prompt)
+        ref_audio = data.get("reference_audio")
+        if ref_audio:
+            self.reference_audio_var.set(ref_audio)
+        self.reference_audio_custom = bool(data.get("reference_audio_custom", False))
+
+        voice_preset_id = data.get("voice_preset_id")
+        if voice_preset_id:
+            try:
+                self.apply_voice_preset(voice_preset_id, keep_prompt=True)
+            except ValueError:
+                pass
+
+    def save_settings(self):
+        """Persist UI settings to disk."""
+        data = {
+            "epub_path": self.epub_path.get(),
+            "output_dir": self.output_dir.get(),
+            "voice_preset_id": self.voice_preset_id.get(),
+            "voice_prompt": self.voice_prompt,
+            "reference_audio": self.reference_audio_var.get(),
+            "reference_audio_custom": self.reference_audio_custom,
+        }
+        try:
+            with open(self.SETTINGS_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except OSError:
+            pass
+
+    def on_close(self):
+        """Save settings before closing the app."""
+        self.save_settings()
+        self.destroy()
     
     def load_epub(self, epub_path: str):
         """Parse EPUB and populate chapter list."""
@@ -563,11 +667,103 @@ class AudiobookApp(ttk.Window):
                 if result:
                     self.resumable_progress = load_progress(output)
                     self.voice_prompt = info.get('voice_prompt', self.DEFAULT_VOICE_PROMPT)
+                    voice_preset_id = info.get('voice_preset_id') or self.voice_preset_id.get()
+                    try:
+                        preset = get_voice_preset(voice_preset_id)
+                        if preset.get("engine") == "chatterbox" and info.get("voice_prompt"):
+                            self.reference_audio_var.set(info.get("voice_prompt"))
+                            self.reference_audio_custom = True
+                    except ValueError:
+                        pass
+                    self.apply_voice_preset(voice_preset_id, keep_prompt=True)
                     self.log(f"Ready to resume from chunk {info['completed']}")
                 else:
                     # User chose not to resume, clean up
                     cleanup_temp_chunks(output)
                     self.resumable_progress = None
+
+    def init_voice_presets(self):
+        """Initialize voice preset UI and defaults."""
+        self.voice_preset_ids = [p["id"] for p in VOICE_PRESETS]
+        self.voice_preset_labels = [p["label"] for p in VOICE_PRESETS]
+        self.voice_preset_combo.configure(values=self.voice_preset_labels)
+        if self.voice_preset_labels:
+            self.voice_preset_combo.current(0)
+            self.apply_voice_preset(self.voice_preset_ids[0], keep_prompt=False)
+        self.voice_preset_combo.bind("<<ComboboxSelected>>", self.on_voice_preset_change)
+
+    def on_voice_preset_change(self, _event=None):
+        """Update voice config when a new preset is selected."""
+        label = self.voice_preset_combo.get()
+        if label in self.voice_preset_labels:
+            idx = self.voice_preset_labels.index(label)
+            self.apply_voice_preset(self.voice_preset_ids[idx], keep_prompt=False)
+
+    def apply_voice_preset(self, preset_id: str, keep_prompt: bool):
+        """Apply preset settings to the UI and internal state."""
+        preset = get_voice_preset(preset_id)
+        self.voice_preset_id.set(preset_id)
+        if preset_id in getattr(self, "voice_preset_ids", []):
+            idx = self.voice_preset_ids.index(preset_id)
+            if self.voice_preset_combo.current() != idx:
+                self.voice_preset_combo.current(idx)
+
+        engine = preset.get("engine", "maya1")
+
+        if engine == "maya1":
+            self.voice_detail_label_var.set("Voice Prompt:")
+            if not keep_prompt:
+                self.voice_prompt = preset.get("prompt", self.DEFAULT_VOICE_PROMPT)
+            self.voice_detail_var.set(self._truncate_prompt(self.voice_prompt))
+            self.btn_voice_edit.config(state=NORMAL)
+            self.btn_reference_browse.config(state=DISABLED)
+        else:
+            self.voice_detail_label_var.set("Reference Audio:")
+            if not keep_prompt:
+                self.reference_audio_custom = False
+                self.reference_audio_var.set(preset.get("reference_audio", ""))
+            elif not self.reference_audio_var.get():
+                self.reference_audio_var.set(preset.get("reference_audio", ""))
+            self.voice_detail_var.set(self.reference_audio_var.get())
+            self.btn_voice_edit.config(state=DISABLED)
+            self.btn_reference_browse.config(state=NORMAL)
+
+    def browse_reference_audio(self):
+        """Pick a reference audio file for Chatterbox."""
+        path = filedialog.askopenfilename(
+            title="Select reference audio",
+            filetypes=[("Audio files", "*.wav *.mp3 *.flac"), ("All Files", "*.*")]
+        )
+        if path:
+            self.reference_audio_var.set(path)
+            self.voice_detail_var.set(path)
+            self.reference_audio_custom = True
+            self.log("Reference audio updated")
+
+    def _truncate_prompt(self, prompt: str, limit: int = 80) -> str:
+        prompt = prompt.strip()
+        if len(prompt) <= limit:
+            return prompt
+        return prompt[:limit - 3].rstrip() + "..."
+
+    def set_voice_controls_state(self, state: str):
+        """Enable or disable voice controls based on engine type."""
+        combo_state = "readonly" if state != "disabled" else "disabled"
+        self.voice_preset_combo.config(state=combo_state)
+        button_state = NORMAL if state != "disabled" else DISABLED
+        if self.voice_preset_id.get():
+            try:
+                preset = get_voice_preset(self.voice_preset_id.get())
+            except ValueError:
+                self.btn_voice_edit.config(state=DISABLED)
+                self.btn_reference_browse.config(state=DISABLED)
+                return
+            if preset.get("engine") == "maya1":
+                self.btn_voice_edit.config(state=button_state)
+                self.btn_reference_browse.config(state=DISABLED)
+            else:
+                self.btn_voice_edit.config(state=DISABLED)
+                self.btn_reference_browse.config(state=button_state)
     
     def edit_voice_prompt(self):
         """Open dialog to edit voice prompt."""
@@ -576,6 +772,7 @@ class AudiobookApp(ttk.Window):
         
         if dialog.result is not None:
             self.voice_prompt = dialog.result
+            self.voice_detail_var.set(self._truncate_prompt(self.voice_prompt))
             self.log("Voice prompt updated")
     
     def start_conversion(self):
@@ -586,6 +783,10 @@ class AudiobookApp(ttk.Window):
         
         if not self.output_dir.get():
             messagebox.showerror("Error", "Please select an output directory.")
+            return
+
+        if not self.voice_preset_id.get():
+            messagebox.showerror("Error", "No voice preset selected.")
             return
         
         selected = [o for o, v in self.chapter_selection.items() if v.get()]
@@ -602,7 +803,9 @@ class AudiobookApp(ttk.Window):
         self.btn_start.config(state=DISABLED)
         self.btn_pause.config(state=NORMAL)
         self.btn_cancel.config(state=NORMAL)
-        self.btn_voice.config(state=DISABLED)
+        self.set_voice_controls_state("disabled")
+        self.progress_detail_var.set("Starting...")
+        self.chunk_progress_var.set("0 / ?")
         
         # Start timer
         self.start_time = time.time()
@@ -623,12 +826,14 @@ class AudiobookApp(ttk.Window):
             self.is_paused = False
             self.pause_event.clear()
             self.btn_pause.config(text="⏸ Pause")
+            self.progress_detail_var.set("Running")
             self.log("Resuming...")
         else:
             # Pause (after current chunk)
             self.is_paused = True
             self.pause_event.set()
             self.btn_pause.config(text="▶ Resume")
+            self.progress_detail_var.set("Paused")
             self.log("Pausing after current chunk...")
     
     def cancel_conversion(self):
@@ -680,7 +885,7 @@ class AudiobookApp(ttk.Window):
                 chapter_idx = len(chapter_titles) - 1
                 
                 cleaned = clean_text(chapter.content)
-                chunks = chunk_text_for_quality(cleaned, max_words=50, min_words=15)
+                chunks = chunk_text_for_quality(cleaned, max_words=40, min_words=15)
                 
                 for chunk in chunks:
                     all_chunks.append(chunk)
@@ -688,6 +893,7 @@ class AudiobookApp(ttk.Window):
             
             total_chunks = len(all_chunks)
             self.log(f"Total chunks: {total_chunks}")
+            self.update_chunk_progress(0, total_chunks)
             
             # Check for resume
             start_idx = 0
@@ -701,14 +907,36 @@ class AudiobookApp(ttk.Window):
                 
                 self.log(f"Resuming from chunk {start_idx}")
                 self.resumable_progress = None
+                self.update_chunk_progress(start_idx, total_chunks)
+
+            # Resolve voice preset and engine config
+            voice_preset_id = self.voice_preset_id.get() or (VOICE_PRESETS[0]["id"] if VOICE_PRESETS else "")
+            preset = get_voice_preset(voice_preset_id)
+            engine_type = preset.get("engine", "maya1")
+            voice_prompt = self.voice_prompt or preset.get("prompt", self.DEFAULT_VOICE_PROMPT)
+
+            if engine_type == "chatterbox":
+                reference_audio = self.reference_audio_var.get().strip()
+                if reference_audio:
+                    if not os.path.exists(reference_audio):
+                        raise FileNotFoundError(f"Reference audio not found: {reference_audio}")
+                else:
+                    validate_voice_preset(voice_preset_id)
+                    reference_audio = preset.get("reference_audio", "")
+                voice_config = reference_audio
+            else:
+                if not voice_prompt:
+                    raise ValueError("Voice prompt is empty. Please edit the prompt or select a preset.")
+                voice_config = voice_prompt
             
             # Initialize progress
             progress = ConversionProgress(
                 epub_path=epub_path,
                 output_dir=output_dir,
                 selected_chapters=selected_chapters,
-                voice_prompt=self.voice_prompt,
+                voice_prompt=voice_config,
                 total_chunks=total_chunks,
+                voice_preset_id=voice_preset_id,
                 completed_chunks=list(chunk_files.keys()),
                 chunk_files=chunk_files,
                 chunk_to_chapter=chunk_to_chapter,
@@ -720,7 +948,7 @@ class AudiobookApp(ttk.Window):
             self.update_progress(5)
             
             # Determine which engine to use
-            use_batch = self.use_batch_mode.get() and BATCH_MODE_AVAILABLE
+            use_batch = self.use_batch_mode.get() and BATCH_MODE_AVAILABLE and engine_type == "maya1"
             batch_size = self.batch_size_var.get()
 
             # Validate batch size
@@ -731,7 +959,15 @@ class AudiobookApp(ttk.Window):
             if batch_size > 32:
                 self.log(f"Warning: Large batch size ({batch_size}) may cause memory issues")
             
-            if use_batch:
+            if engine_type == "chatterbox":
+                from chatterbox_engine import ChatterboxTurboEngine
+                import torch
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                self.log("Loading Chatterbox Turbo...")
+                engine = ChatterboxTurboEngine(device=device)
+                engine.load()
+                sample_rate = 22050
+            elif use_batch:
                 self.log("Using FastMaya batch engine...")
                 from fast_maya_engine import FastMaya1Engine
                 engine = FastMaya1Engine(memory_util=0.5, use_upsampler=True)
@@ -747,6 +983,7 @@ class AudiobookApp(ttk.Window):
             
             self.log("Model loaded")
             self.update_status("Generating audio...")
+            self.update_progress_detail("Running")
             
             # Generate chunks - batch or sequential
             if use_batch:
@@ -771,11 +1008,14 @@ class AudiobookApp(ttk.Window):
                     batch_texts = all_chunks[i:batch_end]
                     batch_chapters = [chapter_titles[chunk_to_chapter[j]] for j in range(i, batch_end)]
                     
-                    self.update_status(f"Batch {i+1}-{batch_end}/{total_chunks} | {batch_chapters[0]}")
+                    status_text = f"Batch {i+1}-{batch_end}/{total_chunks} | {batch_chapters[0]}"
+                    self.update_status(status_text)
+                    self.update_progress_detail(status_text)
+                    self.update_chunk_progress(batch_end, total_chunks)
                     
                     try:
                         # Generate batch
-                        audios = engine.batch_generate(batch_texts, self.voice_prompt, return_concatenated=False)
+                        audios = engine.batch_generate(batch_texts, voice_prompt, return_concatenated=False)
                         
                         # Save each audio
                         for batch_idx, audio in enumerate(audios):
@@ -820,11 +1060,21 @@ class AudiobookApp(ttk.Window):
                     
                     chunk = all_chunks[i]
                     chapter_title = chapter_titles[chunk_to_chapter[i]]
+                    status_text = f"Chunk {i+1}/{total_chunks} | {chapter_title}"
                     
-                    self.update_status(f"Chunk {i+1}/{total_chunks} | {chapter_title}")
+                    self.update_status(status_text)
+                    self.update_progress_detail(status_text)
+                    self.update_chunk_progress(i + 1, total_chunks)
                     
                     try:
-                        audio = engine.generate_audio(chunk, self.voice_prompt, max_duration_sec=60)
+                        if engine_type == "chatterbox":
+                            audio = engine.generate_audio(
+                                text=chunk,
+                                reference_audio_path=reference_audio,
+                                max_duration_sec=60
+                            )
+                        else:
+                            audio = engine.generate_audio(chunk, voice_prompt, max_duration_sec=60)
                         
                         if audio is not None and len(audio) > 0:
                             chunk_path = os.path.join(temp_dir, f"chunk_{i:04d}.wav")
@@ -939,6 +1189,15 @@ class AudiobookApp(ttk.Window):
     def update_status(self, status: str):
         """Update status bar (thread-safe)."""
         self.after(0, lambda: self.status_var.set(status))
+
+    def update_progress_detail(self, detail: str):
+        """Update progress detail label (thread-safe)."""
+        self.after(0, lambda: self.progress_detail_var.set(detail))
+
+    def update_chunk_progress(self, current: int, total: int):
+        """Update chunk counter label (thread-safe)."""
+        label = f"{current} / {total}" if total else f"{current} / ?"
+        self.after(0, lambda: self.chunk_progress_var.set(label))
     
     def update_progress(self, value: float):
         """Update progress bar (thread-safe)."""
@@ -953,6 +1212,30 @@ class AudiobookApp(ttk.Window):
             self.log_text.see(tk.END)
         
         self.after(0, _log)
+
+    def copy_log(self):
+        """Copy log contents to clipboard."""
+        log_text = self.log_text.get("1.0", tk.END).strip()
+        self.clipboard_clear()
+        self.clipboard_append(log_text)
+        self.log("Log copied to clipboard")
+
+    def open_output_folder(self):
+        """Open the output folder in the system file manager."""
+        output_dir = self.output_dir.get()
+        if not output_dir or not os.path.isdir(output_dir):
+            messagebox.showwarning("Open Folder", "Output directory is not set or does not exist.")
+            return
+
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(output_dir)
+            elif sys.platform == "darwin":
+                os.system(f"open \"{output_dir}\"")
+            else:
+                os.system(f"xdg-open \"{output_dir}\"")
+        except Exception as e:
+            messagebox.showerror("Open Folder", f"Failed to open output folder: {e}")
     
     def update_timer(self):
         """Update elapsed time display."""
@@ -988,7 +1271,9 @@ class AudiobookApp(ttk.Window):
             self.btn_start.config(state=NORMAL)
             self.btn_pause.config(state=DISABLED, text="⏸ Pause")
             self.btn_cancel.config(state=DISABLED)
-            self.btn_voice.config(state=NORMAL)
+            self.set_voice_controls_state("readonly")
+            self.progress_detail_var.set("Idle")
+            self.chunk_progress_var.set("0 / 0")
             
             if success:
                 self.status_var.set("Complete!")

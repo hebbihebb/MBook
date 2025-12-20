@@ -21,6 +21,7 @@ class ConversionProgress:
     selected_chapters: List[int]  # Indices of chapters to convert
     voice_prompt: str
     total_chunks: int
+    voice_preset_id: str = ""
     completed_chunks: List[int] = field(default_factory=list)  # Indices of completed chunks
     chunk_files: Dict[int, str] = field(default_factory=dict)  # chunk_idx -> temp wav path
     chunk_to_chapter: List[int] = field(default_factory=list)  # Maps chunk idx -> chapter idx
@@ -151,7 +152,8 @@ def get_resumable_info(output_dir: str) -> Optional[Dict]:
         'epub_path': progress.epub_path,
         'started_at': progress.started_at,
         'selected_chapters': progress.selected_chapters,
-        'voice_prompt': progress.voice_prompt
+        'voice_prompt': progress.voice_prompt,
+        'voice_preset_id': progress.voice_preset_id
     }
 
 

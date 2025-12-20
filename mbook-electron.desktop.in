@@ -2,7 +2,7 @@
 Type=Application
 Name=MBook Electron
 Comment=Launch the MBook Electron app
-Exec=/mnt/Games/MBook/start_electron.sh
-Path=/mnt/Games/MBook
+Exec=@MBOOK_ROOT@/start_electron.sh
+Path=@MBOOK_ROOT@
 Terminal=false
 Categories=Utility;
