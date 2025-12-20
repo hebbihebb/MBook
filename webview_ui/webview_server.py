@@ -15,6 +15,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from epub_parser import EpubParser
 from conversion_state import ConversionState
 from conversion_worker import run_conversion_job
+from voice_presets import (
+    DEFAULT_VOICE_PROMPT,
+    VOICE_PRESETS,
+    validate_voice_preset,
+    get_voice_presets as get_filtered_presets,
+    get_voice_samples_dir,
+    get_available_voice_samples
+)
+from config_manager import ConfigManager
 from voice_presets import DEFAULT_VOICE_PROMPT, VOICE_PRESETS, validate_voice_preset
 from webview_ui.temp_config import UPLOAD_FOLDER, OUTPUT_ROOT, allowed_file, ALLOWED_EXTENSIONS
 
@@ -22,6 +31,9 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SECRET_KEY'] = os.urandom(24)  # Generate a random secret key for session/CSRF
 csrf = CSRFProtect(app)
+
+# Initialize config manager
+config_manager = ConfigManager()
 
 # Global state
 epub_parser = None
@@ -303,8 +315,49 @@ def cancel_conversion():
 
 @app.route("/api/voice_presets", methods=["GET"])
 def get_voice_presets():
-    """Return available voice presets."""
-    return jsonify({"presets": VOICE_PRESETS})
+    """Return available voice presets, optionally filtered by engine."""
+    engine = request.args.get('engine')
+    presets = get_filtered_presets(engine)
+    return jsonify({"presets": presets})
+
+
+@app.route("/api/settings", methods=["GET", "POST"])
+def settings_endpoint():
+    """Manage application settings."""
+    if request.method == "POST":
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        # Update config
+        try:
+            if "default_engine" in data:
+                config_manager.set_default_engine(data["default_engine"])
+
+            # Can add other settings updates here
+
+            return jsonify({"status": "updated", "config": config_manager._config})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+    # GET request
+    return jsonify({
+        "config": config_manager._config,
+        "default_engine": config_manager.get_default_engine(),
+        "info": {
+            "voice_samples_dir": get_voice_samples_dir(),
+            "available_samples": get_available_voice_samples()
+        }
+    })
+
+
+@app.route("/api/voice_samples", methods=["GET"])
+def get_voice_samples():
+    """Get list of available voice samples."""
+    return jsonify({
+        "directory": get_voice_samples_dir(),
+        "files": get_available_voice_samples()
+    })
 
 @app.route("/api/events")
 def events():

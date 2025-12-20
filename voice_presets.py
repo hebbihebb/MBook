@@ -1,5 +1,6 @@
 import os
-from typing import Dict, List
+import glob
+from typing import Dict, List, Optional
 
 DEFAULT_VOICE_PROMPT = (
     "Male narrator voice in his 40s with an American accent. "
@@ -65,8 +66,40 @@ def get_voice_preset(voice_id: str) -> Dict[str, str]:
     """Return voice preset configuration by ID."""
     preset = next((p for p in VOICE_PRESETS if p["id"] == voice_id), None)
     if not preset:
+        # Fallback if ID not found (might have changed engine filters)
+        # Try to find any preset, or just raise error
         raise ValueError(f"Unknown voice preset: {voice_id}")
     return preset
+
+
+def get_voice_presets(engine_filter: Optional[str] = None) -> List[Dict[str, str]]:
+    """
+    Return voice presets, optionally filtered by engine.
+
+    Args:
+        engine_filter: 'maya1' or 'chatterbox'. If None, returns all.
+    """
+    if not engine_filter:
+        return VOICE_PRESETS
+
+    return [p for p in VOICE_PRESETS if p.get("engine") == engine_filter]
+
+
+def get_voice_samples_dir() -> str:
+    """Return absolute path to voice samples directory."""
+    # Assuming voice_samples is in root relative to this file
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, "voice_samples")
+
+
+def get_available_voice_samples() -> List[str]:
+    """Return list of .wav files in voice_samples directory."""
+    samples_dir = get_voice_samples_dir()
+    if not os.path.exists(samples_dir):
+        return []
+
+    files = glob.glob(os.path.join(samples_dir, "*.wav"))
+    return sorted([os.path.basename(f) for f in files])
 
 
 def validate_voice_preset(voice_id: str) -> Dict[str, str]:

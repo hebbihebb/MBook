@@ -35,7 +35,11 @@ try:
         VOICE_PRESETS,
         get_voice_preset,
         validate_voice_preset,
+        get_voice_presets as get_filtered_presets,
+        get_voice_samples_dir,
+        get_available_voice_samples,
     )
+    from config_manager import ConfigManager
 except ImportError as e:
     print(f"Warning: Missing dependencies: {e}")
     DEFAULT_VOICE_PROMPT_TEXT = ""
@@ -44,6 +48,21 @@ except ImportError as e:
         raise ValueError("Voice presets unavailable")
     def validate_voice_preset(_voice_id: str) -> dict:
         raise ValueError("Voice presets unavailable")
+    def get_filtered_presets(engine_filter=None):
+        return []
+    def get_voice_samples_dir():
+        return ""
+    def get_available_voice_samples():
+        return []
+    class ConfigManager:
+        def __init__(self): self._config={}
+        def load_config(self): pass
+        def save_config(self): pass
+        def get(self, k, d=None): return d
+        def set(self, k, v): pass
+        def update(self, d): pass
+        def get_default_engine(self): return "maya1"
+        def set_default_engine(self, e): pass
 
 # Check for optional batch processing support
 # NOTE: Batch mode is DISABLED as of 2024-12-10
@@ -57,6 +76,117 @@ BATCH_MODE_AVAILABLE = False  # Disabled - see note above
 #     BATCH_MODE_AVAILABLE = is_lmdeploy_available()
 # except ImportError:
 #     BATCH_MODE_AVAILABLE = False
+
+
+class SettingsWindow(tk.Toplevel):
+    """Window for configuring application settings (Engine & Voice)."""
+
+    def __init__(self, parent, config_manager: ConfigManager, on_save_callback=None):
+        super().__init__(parent)
+        self.title("Engine & Voice Configuration")
+        self.geometry("600x500")
+        self.resizable(False, False)
+        self.config_manager = config_manager
+        self.on_save_callback = on_save_callback
+
+        # Make modal
+        self.transient(parent)
+        self.grab_set()
+
+        self.engine_var = tk.StringVar(value=self.config_manager.get_default_engine())
+
+        self.create_widgets()
+
+        # Center on parent
+        self.update_idletasks()
+        try:
+            x = parent.winfo_x() + (parent.winfo_width() - self.winfo_width()) // 2
+            y = parent.winfo_y() + (parent.winfo_height() - self.winfo_height()) // 2
+            self.geometry(f"+{x}+{y}")
+        except:
+            pass
+
+    def create_widgets(self):
+        # Header
+        ttk.Label(self, text="Default TTS Engine", font=("Segoe UI", 12, "bold")).pack(pady=(15, 5), padx=20, anchor=W)
+
+        # Engine Selection
+        engine_frame = ttk.Labelframe(self, text="Select Engine", padding=15)
+        engine_frame.pack(fill=X, padx=20, pady=5)
+
+        # Maya1 Option
+        maya_frame = ttk.Frame(engine_frame)
+        maya_frame.pack(fill=X, pady=5)
+        ttk.Radiobutton(maya_frame, text="Maya1 (High-Quality Narration)", variable=self.engine_var, value="maya1", command=self.update_info_panel).pack(anchor=W)
+        ttk.Label(maya_frame, text="    Best for long-form content. Natural prosody.", font=("Segoe UI", 9), bootstyle="secondary").pack(anchor=W)
+
+        # Chatterbox Option
+        chat_frame = ttk.Frame(engine_frame)
+        chat_frame.pack(fill=X, pady=5)
+        ttk.Radiobutton(chat_frame, text="Chatterbox (Voice Cloning)", variable=self.engine_var, value="chatterbox", command=self.update_info_panel).pack(anchor=W)
+        ttk.Label(chat_frame, text="    Clones voices from reference audio.", font=("Segoe UI", 9), bootstyle="secondary").pack(anchor=W)
+
+        # Info Panel
+        self.info_frame = ttk.Labelframe(self, text="Engine Configuration", padding=10)
+        self.info_frame.pack(fill=BOTH, expand=True, padx=20, pady=15)
+
+        self.info_content = ttk.Frame(self.info_frame)
+        self.info_content.pack(fill=BOTH, expand=True)
+
+        # Actions
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill=X, padx=20, pady=15)
+        ttk.Button(btn_frame, text="Save Changes", command=self.save, bootstyle="success").pack(side=RIGHT, padx=5)
+        ttk.Button(btn_frame, text="Cancel", command=self.destroy, bootstyle="secondary").pack(side=RIGHT, padx=5)
+
+        self.update_info_panel()
+
+    def update_info_panel(self):
+        # Clear current content
+        for widget in self.info_content.winfo_children():
+            widget.destroy()
+
+        engine = self.engine_var.get()
+
+        if engine == "maya1":
+            ttk.Label(self.info_content, text="Available Built-in Presets:", font=("Segoe UI", 10, "bold")).pack(anchor=W, pady=(0, 5))
+
+            # List presets
+            presets = get_filtered_presets("maya1")
+            text_area = ScrolledText(self.info_content, height=10, font=("Consolas", 9))
+            text_area.pack(fill=BOTH, expand=True)
+
+            for p in presets:
+                text_area.insert(tk.END, f"• {p['label']}\n  Prompt: {p.get('prompt', '')[:60]}...\n\n")
+            text_area.configure(state='disabled')
+
+        else:
+            ttk.Label(self.info_content, text="Voice Samples Directory:", font=("Segoe UI", 10, "bold")).pack(anchor=W, pady=(0, 5))
+
+            samples_dir = get_voice_samples_dir()
+            entry = ttk.Entry(self.info_content)
+            entry.insert(0, samples_dir)
+            entry.configure(state='readonly')
+            entry.pack(fill=X, pady=(0, 10))
+
+            ttk.Label(self.info_content, text="Detected .wav Files:", font=("Segoe UI", 10, "bold")).pack(anchor=W, pady=(0, 5))
+
+            files = get_available_voice_samples()
+            text_area = ScrolledText(self.info_content, height=8, font=("Consolas", 9))
+            text_area.pack(fill=BOTH, expand=True)
+
+            if files:
+                for f in files:
+                    text_area.insert(tk.END, f"• {f}\n")
+            else:
+                text_area.insert(tk.END, "(No .wav files found in directory)")
+            text_area.configure(state='disabled')
+
+    def save(self):
+        self.config_manager.set_default_engine(self.engine_var.get())
+        if self.on_save_callback:
+            self.on_save_callback()
+        self.destroy()
 
 
 class VoicePromptDialog(tk.Toplevel):
@@ -133,8 +263,6 @@ class VoicePromptDialog(tk.Toplevel):
 class AudiobookApp(ttk.Window):
     """Main application window."""
 
-    SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".mbook_settings.json")
-    
     DEFAULT_VOICE_PROMPT = DEFAULT_VOICE_PROMPT_TEXT
     
     def __init__(self):
@@ -142,6 +270,9 @@ class AudiobookApp(ttk.Window):
         self.title("Maya1 Audiobook Converter")
         self.geometry("900x700")
         self.minsize(800, 600)
+
+        # Initialize ConfigManager
+        self.config_manager = ConfigManager()
         
         # State variables
         self.epub_path = tk.StringVar()
@@ -184,8 +315,9 @@ class AudiobookApp(ttk.Window):
         self.batch_size_var = tk.IntVar(value=4)  # Process 4 chunks at a time
         
         self.create_widgets()
-        self.init_voice_presets()
-        self.load_settings()
+        self.load_settings() # Load settings first to get default engine
+        self.init_voice_presets() # Initialize voices based on engine
+
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         
     def create_widgets(self):
@@ -224,8 +356,16 @@ class AudiobookApp(ttk.Window):
 
         # Row 2: Voice Preset
         ttk.Label(setup_frame, text="Voice Preset:", font=("Segoe UI", 10)).grid(row=2, column=0, sticky=W, pady=5)
-        self.voice_preset_combo = ttk.Combobox(setup_frame, state="readonly")
-        self.voice_preset_combo.grid(row=2, column=1, sticky=EW, padx=10, pady=5)
+
+        voice_frame = ttk.Frame(setup_frame)
+        voice_frame.grid(row=2, column=1, sticky=EW, padx=10, pady=5)
+
+        self.voice_preset_combo = ttk.Combobox(voice_frame, state="readonly")
+        self.voice_preset_combo.pack(side=LEFT, fill=X, expand=True)
+
+        # Settings Button (Small gear icon next to combo)
+        ttk.Button(voice_frame, text="⚙", command=self.open_settings, bootstyle="secondary-link", width=3).pack(side=RIGHT, padx=(5,0))
+
         self.btn_voice_edit = ttk.Button(
             setup_frame,
             text="✎ Edit Prompt",
@@ -419,51 +559,44 @@ class AudiobookApp(ttk.Window):
 
     def load_settings(self):
         """Load persisted UI settings."""
-        if not os.path.exists(self.SETTINGS_PATH):
-            return
-        try:
-            with open(self.SETTINGS_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, json.JSONDecodeError):
-            return
+        # ConfigManager already loads config on init
 
-        epub_path = data.get("epub_path")
+        epub_path = self.config_manager.get("epub_path")
         if epub_path and os.path.exists(epub_path):
             self.epub_path.set(epub_path)
             self.load_epub(epub_path)
 
-        output_dir = data.get("output_dir")
+        output_dir = self.config_manager.get("output_dir")
         if output_dir and os.path.isdir(output_dir):
             self.output_dir.set(output_dir)
 
-        self.voice_prompt = data.get("voice_prompt", self.voice_prompt)
-        ref_audio = data.get("reference_audio")
+        self.voice_prompt = self.config_manager.get("voice_prompt", self.voice_prompt)
+
+        ref_audio = self.config_manager.get("reference_audio")
         if ref_audio:
             self.reference_audio_var.set(ref_audio)
-        self.reference_audio_custom = bool(data.get("reference_audio_custom", False))
 
-        voice_preset_id = data.get("voice_preset_id")
+        self.reference_audio_custom = bool(self.config_manager.get("reference_audio_custom", False))
+
+        voice_preset_id = self.config_manager.get("voice_preset_id")
+
+        # NOTE: apply_voice_preset happens in init_voice_presets or here
+        # But init_voice_presets depends on default_engine which is in config
         if voice_preset_id:
-            try:
-                self.apply_voice_preset(voice_preset_id, keep_prompt=True)
-            except ValueError:
-                pass
+             # We might not be able to apply it yet if the list isn't populated
+             # Store it to apply after init
+             self._pending_voice_preset_id = voice_preset_id
 
     def save_settings(self):
         """Persist UI settings to disk."""
-        data = {
+        self.config_manager.update({
             "epub_path": self.epub_path.get(),
             "output_dir": self.output_dir.get(),
             "voice_preset_id": self.voice_preset_id.get(),
             "voice_prompt": self.voice_prompt,
             "reference_audio": self.reference_audio_var.get(),
             "reference_audio_custom": self.reference_audio_custom,
-        }
-        try:
-            with open(self.SETTINGS_PATH, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-        except OSError:
-            pass
+        })
 
     def on_close(self):
         """Save settings before closing the app."""
@@ -719,14 +852,33 @@ class AudiobookApp(ttk.Window):
                     self.resumable_progress = None
 
     def init_voice_presets(self):
-        """Initialize voice preset UI and defaults."""
-        self.voice_preset_ids = [p["id"] for p in VOICE_PRESETS]
-        self.voice_preset_labels = [p["label"] for p in VOICE_PRESETS]
+        """Initialize voice preset UI and defaults based on engine."""
+        engine = self.config_manager.get_default_engine()
+        presets = get_filtered_presets(engine)
+
+        self.voice_preset_ids = [p["id"] for p in presets]
+        self.voice_preset_labels = [p["label"] for p in presets]
         self.voice_preset_combo.configure(values=self.voice_preset_labels)
-        if self.voice_preset_labels:
+
+        # Try to restore pending preset or default
+        target_id = getattr(self, "_pending_voice_preset_id", None)
+
+        if target_id and target_id in self.voice_preset_ids:
+            idx = self.voice_preset_ids.index(target_id)
+            self.voice_preset_combo.current(idx)
+            self.apply_voice_preset(target_id, keep_prompt=True) # Keep prompt from settings
+        elif self.voice_preset_labels:
             self.voice_preset_combo.current(0)
             self.apply_voice_preset(self.voice_preset_ids[0], keep_prompt=False)
+        else:
+            self.voice_preset_combo.set("")
+            self.voice_preset_id.set("")
+
         self.voice_preset_combo.bind("<<ComboboxSelected>>", self.on_voice_preset_change)
+
+    def open_settings(self):
+        """Open settings window."""
+        SettingsWindow(self, self.config_manager, on_save_callback=self.init_voice_presets)
 
     def on_voice_preset_change(self, _event=None):
         """Update voice config when a new preset is selected."""
