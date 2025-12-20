@@ -657,14 +657,50 @@ class AudiobookApp(ttk.Window):
         if has_resumable_job(epub, output):
             info = get_resumable_info(output)
             if info:
-                result = messagebox.askyesno(
-                    "Resume Conversion?",
+                # Check for chapter selection mismatch
+                saved_chapters_list = info.get('selected_chapters')
+                selection_mismatch = False
+                legacy_file = False
+
+                if saved_chapters_list is None:
+                    legacy_file = True
+                else:
+                    saved_chapters = set(saved_chapters_list)
+                    current_chapters = {order for order, var in self.chapter_selection.items() if var.get()}
+                    selection_mismatch = saved_chapters != current_chapters
+
+                msg = (
                     f"Found incomplete conversion:\n\n"
                     f"Progress: {info['completed']}/{info['total']} chunks\n"
                     f"Started: {info['started_at'][:19]}\n\n"
-                    f"Resume from where you left off?"
                 )
+
+                if legacy_file:
+                     msg += "NOTE: Saved progress is from an older version. Please ensure you have selected the correct chapters manually.\n\n"
+                elif selection_mismatch:
+                    msg += "NOTE: Saved progress uses a different chapter selection.\nResuming will restore the saved selection.\n\n"
+
+                msg += "Resume from where you left off?"
+
+                result = messagebox.askyesno("Resume Conversion?", msg)
+
                 if result:
+                    # If mismatch, confirm with user if they really want to restore (implicitly yes by clicking Resume, but let's be safe)
+                    if selection_mismatch and not legacy_file:
+                         # Force restore selection
+                        self.log("Restoring saved chapter selection...")
+                        self.deselect_all_chapters()
+                        for order in saved_chapters:
+                             if order in self.chapter_selection:
+                                 self.chapter_selection[order].set(True)
+                                 # Update treeview visual
+                                 self.chapter_tree.item(str(order), values=(
+                                     "☑",
+                                     self.chapter_tree.item(str(order), "values")[1],
+                                     self.chapter_tree.item(str(order), "values")[2]
+                                 ))
+                        self.update_selection_info()
+
                     self.resumable_progress = load_progress(output)
                     self.voice_prompt = info.get('voice_prompt', self.DEFAULT_VOICE_PROMPT)
                     voice_preset_id = info.get('voice_preset_id') or self.voice_preset_id.get()
