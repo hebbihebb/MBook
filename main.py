@@ -852,16 +852,26 @@ class AudiobookApp(ttk.Window):
                     self.resumable_progress = None
 
     def init_voice_presets(self):
-        """Initialize voice preset UI and defaults based on engine."""
-        engine = self.config_manager.get_default_engine()
-        presets = get_filtered_presets(engine)
+        """Initialize voice preset UI with all available voices (Unified)."""
+        # Load all presets regardless of default engine
+        presets = get_filtered_presets(None)
 
-        self.voice_preset_ids = [p["id"] for p in presets]
-        self.voice_preset_labels = [p["label"] for p in presets]
+        self.voice_preset_ids = []
+        self.voice_preset_labels = []
+
+        for p in presets:
+            self.voice_preset_ids.append(p["id"])
+            # Add engine prefix for clarity
+            engine_prefix = "[Maya1] " if p.get("engine") == "maya1" else "[Chatterbox] "
+            self.voice_preset_labels.append(f"{engine_prefix}{p['label']}")
+
         self.voice_preset_combo.configure(values=self.voice_preset_labels)
 
         # Try to restore pending preset or default
         target_id = getattr(self, "_pending_voice_preset_id", None)
+
+        if not target_id:
+            target_id = self.config_manager.get("voice_preset_id")
 
         if target_id and target_id in self.voice_preset_ids:
             idx = self.voice_preset_ids.index(target_id)
