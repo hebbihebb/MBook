@@ -44,6 +44,15 @@
         };
     </script>
     <style>
+        .drop-zone {
+            transition: all 0.2s ease-in-out;
+            border: 1px dashed transparent;
+        }
+        .drop-zone.drag-over {
+            border-color: #10b981;
+            background-color: rgba(16, 185, 129, 0.1);
+        }
+
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px
@@ -132,12 +141,15 @@
         <div class="flex-1 flex flex-col border-r border-border-dark min-w-0">
             <div class="p-4 pb-2 space-y-3 shrink-0">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div class="space-y-1">
-                        <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">EPUB_PATH</label>
-                        <div class="flex">
+                    <div class="space-y-1 drop-zone p-1 -m-1" id="epub-drop-zone">
+                        <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">EPUB_PATH <span class="text-xs text-slate-600 normal-case">(Drag & Drop supported)</span></label>
+                        <div class="flex relative">
+                            <div id="upload-overlay" class="absolute inset-0 bg-surface-dark/90 z-10 flex items-center justify-center hidden">
+                                <span class="text-primary text-xs font-bold animate-pulse">UPLOADING...</span>
+                            </div>
                             <input
                                 class="block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none"
-                                id="epub-path" type="text" placeholder="Type path or click Browse..."
+                                id="epub-path" type="text" placeholder="Type path, drag file, or click Browse..."
                                 title="Type file path and press Enter, or click Browse" />
                             <button
                                 class="inline-flex items-center px-3 py-1 border border-l-0 border-border-dark bg-slate-700 text-slate-300 rounded-none hover:bg-slate-600 transition-colors text-xs uppercase"
@@ -149,7 +161,12 @@
                     </div>
                     <div class="space-y-1">
                         <label class="text-xs uppercase tracking-wide text-slate-500 ml-1">OUTPUT_DIR</label>
-                        <div class="flex">
+                        <div class="flex" id="output-dir-container">
+                            <select
+                                class="terminal-select block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none hidden"
+                                id="server-output-select">
+                                <option value="" disabled selected>Select server output directory...</option>
+                            </select>
                             <input
                                 class="block w-full border-border-dark bg-surface-dark text-console-text text-sm focus:border-primary focus:ring-primary h-8 px-2 border rounded-none"
                                 id="output-dir" type="text" placeholder="Type path or click Browse..."

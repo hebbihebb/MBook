@@ -3,6 +3,7 @@ import json
 import threading
 import uuid
 import time
+from werkzeug.utils import secure_filename
 from flask import Flask, jsonify, request, render_template, send_file, Response
 from flask_wtf.csrf import CSRFProtect
 from tkinter import filedialog
@@ -15,8 +16,10 @@ from epub_parser import EpubParser
 from conversion_state import ConversionState
 from conversion_worker import run_conversion_job
 from voice_presets import DEFAULT_VOICE_PROMPT, VOICE_PRESETS, validate_voice_preset
+from webview_ui.temp_config import UPLOAD_FOLDER, OUTPUT_ROOT, allowed_file, ALLOWED_EXTENSIONS
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SECRET_KEY'] = os.urandom(24)  # Generate a random secret key for session/CSRF
 csrf = CSRFProtect(app)
 
@@ -31,6 +34,52 @@ state_lock = threading.Lock()
 def index():
     """Render the main HTML page."""
     return render_template("index.html")
+
+@app.route("/api/upload_epub", methods=["POST"])
+def upload_epub():
+    """Handle file upload via drag-and-drop."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        # Ensure unique filename to prevent collisions
+        unique_filename = f"{uuid.uuid4()}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(filepath)
+
+        return jsonify({
+            "message": "File uploaded successfully",
+            "filepath": filepath,
+            "filename": filename
+        })
+    else:
+        return jsonify({"error": "Invalid file type. Only EPUB allowed."}), 400
+
+@app.route("/api/get_output_dirs", methods=["GET"])
+def get_output_dirs():
+    """Return a list of allowed output directories."""
+    # List directories in the OUTPUT_ROOT
+    dirs = []
+
+    # Always add the root output folder
+    dirs.append(OUTPUT_ROOT)
+
+    # Add immediate subdirectories
+    try:
+        with os.scandir(OUTPUT_ROOT) as entries:
+            for entry in entries:
+                if entry.is_dir():
+                    dirs.append(entry.path)
+    except Exception as e:
+        print(f"Error scanning output directory: {e}")
+
+    return jsonify({"dirs": dirs})
 
 @app.route("/api/select_epub", methods=["POST"])
 def select_epub():
