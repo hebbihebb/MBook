@@ -334,5 +334,11 @@ def events():
     return response
 
 if __name__ == "__main__":
-    # Bind to 127.0.0.1 for local access only, improving security
-    app.run(host='127.0.0.1', port=5000, threaded=True)  # Enable threading for concurrent requests
+    import argparse
+    parser = argparse.ArgumentParser(description="MBook Webview Server")
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=5000, help="Port to bind to")
+    args = parser.parse_args()
+
+    # Bind to the specified host (defaulting to 127.0.0.1 for security)
+    app.run(host=args.host, port=args.port, threaded=True)  # Enable threading for concurrent requests

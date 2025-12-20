@@ -657,14 +657,50 @@ class AudiobookApp(ttk.Window):
         if has_resumable_job(epub, output):
             info = get_resumable_info(output)
             if info:
-                result = messagebox.askyesno(
-                    "Resume Conversion?",
+                # Check for chapter selection mismatch
+                saved_chapters_list = info.get('selected_chapters')
+                selection_mismatch = False
+                legacy_file = False
+
+                if saved_chapters_list is None:
+                    legacy_file = True
+                else:
+                    saved_chapters = set(saved_chapters_list)
+                    current_chapters = {order for order, var in self.chapter_selection.items() if var.get()}
+                    selection_mismatch = saved_chapters != current_chapters
+
+                msg = (
                     f"Found incomplete conversion:\n\n"
                     f"Progress: {info['completed']}/{info['total']} chunks\n"
                     f"Started: {info['started_at'][:19]}\n\n"
-                    f"Resume from where you left off?"
                 )
+
+                if legacy_file:
+                     msg += "NOTE: Saved progress is from an older version. Please ensure you have selected the correct chapters manually.\n\n"
+                elif selection_mismatch:
+                    msg += "NOTE: Saved progress uses a different chapter selection.\nResuming will restore the saved selection.\n\n"
+
+                msg += "Resume from where you left off?"
+
+                result = messagebox.askyesno("Resume Conversion?", msg)
+
                 if result:
+                    # If mismatch, confirm with user if they really want to restore (implicitly yes by clicking Resume, but let's be safe)
+                    if selection_mismatch and not legacy_file:
+                         # Force restore selection
+                        self.log("Restoring saved chapter selection...")
+                        self.deselect_all_chapters()
+                        for order in saved_chapters:
+                             if order in self.chapter_selection:
+                                 self.chapter_selection[order].set(True)
+                                 # Update treeview visual
+                                 self.chapter_tree.item(str(order), values=(
+                                     "☑",
+                                     self.chapter_tree.item(str(order), "values")[1],
+                                     self.chapter_tree.item(str(order), "values")[2]
+                                 ))
+                        self.update_selection_info()
+
                     self.resumable_progress = load_progress(output)
                     self.voice_prompt = info.get('voice_prompt', self.DEFAULT_VOICE_PROMPT)
                     voice_preset_id = info.get('voice_preset_id') or self.voice_preset_id.get()
@@ -774,6 +810,27 @@ class AudiobookApp(ttk.Window):
             self.voice_prompt = dialog.result
             self.voice_detail_var.set(self._truncate_prompt(self.voice_prompt))
             self.log("Voice prompt updated")
+
+    def get_current_voice_config(self) -> str:
+        """Resolve current voice configuration string based on UI state."""
+        voice_preset_id = self.voice_preset_id.get() or (VOICE_PRESETS[0]["id"] if VOICE_PRESETS else "")
+        preset = get_voice_preset(voice_preset_id)
+        engine_type = preset.get("engine", "maya1")
+
+        if engine_type == "chatterbox":
+            reference_audio = self.reference_audio_var.get().strip()
+            if reference_audio:
+                if not os.path.exists(reference_audio):
+                    raise FileNotFoundError(f"Reference audio not found: {reference_audio}")
+                return reference_audio
+            else:
+                validate_voice_preset(voice_preset_id)
+                return preset.get("reference_audio", "")
+        else:
+            voice_prompt = self.voice_prompt or preset.get("prompt", self.DEFAULT_VOICE_PROMPT)
+            if not voice_prompt:
+                raise ValueError("Voice prompt is empty. Please edit the prompt or select a preset.")
+            return voice_prompt
     
     def start_conversion(self):
         """Start or resume the conversion."""
@@ -794,6 +851,50 @@ class AudiobookApp(ttk.Window):
             messagebox.showerror("Error", "Please select at least one chapter.")
             return
         
+        # Validate voice config and check for mismatch
+        try:
+            current_voice_config = self.get_current_voice_config()
+
+            if self.resumable_progress:
+                saved_config = self.resumable_progress.voice_prompt
+                if current_voice_config != saved_config:
+                    # Mismatch detected
+                    result = messagebox.askyesnocancel(
+                        "Voice Settings Mismatch",
+                        "The current voice settings do not match the saved progress.\n\n"
+                        "Resuming now would cause mixed voices in the audiobook.\n\n"
+                        "Yes: Resume with SAVED voice settings (revert changes)\n"
+                        "No: Start FRESH with CURRENT voice settings (discard progress)"
+                    )
+
+                    if result is None: # Cancel
+                        return
+
+                    if result: # Yes - Use Saved
+                        self.log("Reverting to saved voice settings...")
+                        # Restore preset and config
+                        preset_id = self.resumable_progress.voice_preset_id
+                        self.apply_voice_preset(preset_id, keep_prompt=True)
+
+                        preset = get_voice_preset(preset_id)
+                        engine = preset.get("engine", "maya1")
+                        if engine == "maya1":
+                            self.voice_prompt = saved_config
+                            self.voice_detail_var.set(self._truncate_prompt(self.voice_prompt))
+                        else:
+                            self.reference_audio_var.set(saved_config)
+                            self.voice_detail_var.set(saved_config)
+                            self.reference_audio_custom = True # Assume custom if we are restoring raw path
+
+                    else: # No - Start Fresh
+                        self.log("Discarding previous progress...")
+                        cleanup_temp_chunks(self.output_dir.get())
+                        self.resumable_progress = None
+
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            return
+
         # Update UI state
         self.is_converting = True
         self.is_paused = False
@@ -910,10 +1011,20 @@ class AudiobookApp(ttk.Window):
                 self.update_chunk_progress(start_idx, total_chunks)
 
             # Resolve voice preset and engine config
+            # Use get_current_voice_config logic but need to extract engine_type etc.
+            # Ideally we should pass this info from start_conversion, but for now we reuse the method
+            # implicitly by accessing the UI vars (which are thread-safe for reading mostly).
+            # However, Tkinter variables are NOT thread-safe.
+            # NOTE: Accessing Tkinter variables (StringVar, etc.) from a background thread is risky.
+            # But get() is usually fine.
+
             voice_preset_id = self.voice_preset_id.get() or (VOICE_PRESETS[0]["id"] if VOICE_PRESETS else "")
             preset = get_voice_preset(voice_preset_id)
             engine_type = preset.get("engine", "maya1")
             voice_prompt = self.voice_prompt or preset.get("prompt", self.DEFAULT_VOICE_PROMPT)
+
+            # Re-implementing logic similar to get_current_voice_config but adapted for local variables
+            # We must be careful about UI access.
 
             if engine_type == "chatterbox":
                 reference_audio = self.reference_audio_var.get().strip()
@@ -1103,6 +1214,22 @@ class AudiobookApp(ttk.Window):
             # Stitch audio
             self.update_status("Stitching audio...")
             self.update_progress(86)
+
+            # Validate all chunks are present
+            if len(progress.chunk_files) != total_chunks:
+                missing_chunks = sorted([i for i in range(total_chunks) if i not in progress.chunk_files])
+
+                # Format a readable error message
+                missing_str = ", ".join(map(str, missing_chunks[:10]))
+                if len(missing_chunks) > 10:
+                    missing_str += f", ... (+{len(missing_chunks)-10} more)"
+
+                error_msg = f"Conversion failed: {len(missing_chunks)} chunks failed to generate.\nMissing chunks: {missing_str}"
+                self.log(error_msg)
+
+                # Do NOT proceed to stitching. This prevents silent content loss.
+                self.finish_conversion(False, error_msg)
+                return
             
             audio_files = [progress.chunk_files[i] for i in sorted(progress.chunk_files.keys())]
             chunk_mapping = [chunk_to_chapter[i] for i in sorted(progress.chunk_files.keys())]
