@@ -25,6 +25,7 @@ Convert EPUB files to high-quality M4B audiobooks using state-of-the-art text-to
 - **Voice Presets** - 8 quick-select presets (3 Maya1 + 5 Chatterbox)
 - **Real-time Progress** - SSE-based live updates with pause/cancel/resume controls
 - **Progress Tracking** - Resume interrupted conversions from saved chunks
+- **Remote-Friendly** - Manual path entry and drag-and-drop support for remote/headless setups
 - **Audiobookshelf Ready** - Outputs organized for Audiobookshelf library management
 
 ## Requirements
@@ -106,9 +107,12 @@ python webview_ui/webview_server.py
 The web UI features a terminal-style interface with:
 - Modern dark terminal aesthetic
 - Real-time progress updates via SSE (Server-Sent Events)
+- **Unified Configuration**: Centralized settings for Maya1 and Chatterbox engines
+- **Remote Access Support**: Manual path entry and directory selection for headless servers
+- **Convenient Uploads**: Drag-and-drop EPUB support with automatic parsing
 - **8 voice presets**: 3 Maya1 (prompt-based) + 5 Chatterbox (voice cloning)
 - Pause, cancel, and resume controls
-- Chapter selection with preview
+- Chapter selection with **instant text preview**
 - Book cover display with metadata
 - Custom voice prompt editor
 - Live conversion statistics
@@ -220,6 +224,16 @@ See [voice_samples/README.md](voice_samples/README.md) for detailed voice sample
 ### Debug logging (WebUI)
 
 Set `MBOOK_DEBUG_CHUNKS=1` to log per-chunk details and save chunk text files in the output `temp_chunks` directory. Leave this off for normal use.
+
+## Security
+
+MBook includes several security enhancements to protect against common vulnerabilities:
+
+- **CSRF Protection**: The Web UI uses Flask-WTF to prevent cross-site request forgery.
+- **Secure Binding**: The web server binds to `127.0.0.1` by default to prevent unauthorized network access.
+- **Robust Path Handling**: Strict validation for file uploads and path access to prevent traversal vulnerabilities.
+- **ZIP Bomb Protection**: Secure EPUB extraction limits file sizes to prevent resource exhaustion.
+- **Input Sanitization**: Protection against prompt injection in voice descriptions.
 
 ## Project Structure
 
