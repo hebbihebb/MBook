@@ -2,7 +2,7 @@
 Type=Application
 Name=MBook WebUI
 Comment=Launch the MBook WebUI server
-Exec=/mnt/Games/MBook/start_webui.sh
-Path=/mnt/Games/MBook
+Exec=@MBOOK_ROOT@/start_webui.sh
+Path=@MBOOK_ROOT@
 Terminal=true
 Categories=Utility;

@@ -16,6 +16,8 @@ from conversion_state import ConversionState
 from epub_parser import parse_epub_with_chapters
 from progress_manager import ConversionProgress, save_progress, load_progress, cleanup_progress
 
+DEBUG_CHUNKS = os.getenv("MBOOK_DEBUG_CHUNKS", "").strip().lower() in ("1", "true", "yes", "y", "on")
+
 
 def run_conversion_job(
     epub_path: str,
@@ -47,8 +49,7 @@ def run_conversion_job(
         import soundfile as sf
         import torch
 
-        # Import validate_voice_preset from server module
-        from webview_server import validate_voice_preset
+        from voice_presets import validate_voice_preset
 
         # Validate and get voice preset configuration
         state.add_log(f"Loading voice preset: {voice_preset_id}")
@@ -116,6 +117,7 @@ def run_conversion_job(
             selected_chapters=selected_chapters,
             voice_prompt=preset.get("prompt", "") or preset.get("reference_audio", ""),  # Store voice config
             total_chunks=total_chunks,
+            voice_preset_id=voice_preset_id,
             completed_chunks=list(chunk_files.keys()),
             chunk_files=chunk_files,
             chunk_to_chapter=chunk_to_chapter,
@@ -181,17 +183,18 @@ def run_conversion_job(
             try:
                 # Generate audio with engine-specific parameters
                 if engine_type == "chatterbox":
-                    # Debug: Log chunk text and length
-                    state.add_log(f"[DEBUG] Chunk {i+1} length: {len(chunk)} chars, words: {len(chunk.split())}")
-                    state.add_log(f"[DEBUG] Chunk text preview: {chunk[:100]}...")
-                    # Persist full chunk text for postmortem analysis
-                    try:
-                        debug_text_path = os.path.join(temp_dir, f"chunk_{i:04d}.txt")
-                        with open(debug_text_path, "w", encoding="utf-8") as f:
-                            f.write(chunk)
-                        print(f"[DEBUG] Saved chunk text to {debug_text_path}", flush=True)
-                    except Exception as e:
-                        state.add_log(f"[DEBUG] Failed to write chunk text: {e}")
+                    if DEBUG_CHUNKS:
+                        # Debug: Log chunk text and length
+                        state.add_log(f"[DEBUG] Chunk {i+1} length: {len(chunk)} chars, words: {len(chunk.split())}")
+                        state.add_log(f"[DEBUG] Chunk text preview: {chunk[:100]}...")
+                        # Persist full chunk text for postmortem analysis
+                        try:
+                            debug_text_path = os.path.join(temp_dir, f"chunk_{i:04d}.txt")
+                            with open(debug_text_path, "w", encoding="utf-8") as f:
+                                f.write(chunk)
+                            print(f"[DEBUG] Saved chunk text to {debug_text_path}", flush=True)
+                        except Exception as e:
+                            state.add_log(f"[DEBUG] Failed to write chunk text: {e}")
 
                     audio = engine.generate_audio(
                         text=chunk,
@@ -200,7 +203,7 @@ def run_conversion_job(
                     )
 
                     # Debug: Log audio stats
-                    if audio is not None:
+                    if DEBUG_CHUNKS and audio is not None:
                         state.add_log(f"[DEBUG] Audio shape: {audio.shape}, dtype: {audio.dtype}, range: [{audio.min():.3f}, {audio.max():.3f}]")
                 else:  # maya1
                     audio = engine.generate_audio(

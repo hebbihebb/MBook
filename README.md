@@ -78,6 +78,15 @@ python setup_models.py
 
 ## Usage
 
+### Desktop shortcuts (optional)
+
+To install desktop launchers that point to your current repo location:
+```bash
+./install_desktop_shortcuts.sh
+```
+
+This generates `.desktop` files under `~/.local/share/applications` using the templates in the repo.
+
 ### Web UI (Recommended)
 
 ![Electron Web UI](electron-webui.jpg)
@@ -207,6 +216,10 @@ Clone any voice using a 5-20 second reference audio sample:
    ```
 
 See [voice_samples/README.md](voice_samples/README.md) for detailed voice sample requirements and troubleshooting.
+
+### Debug logging (WebUI)
+
+Set `MBOOK_DEBUG_CHUNKS=1` to log per-chunk details and save chunk text files in the output `temp_chunks` directory. Leave this off for normal use.
 
 ## Project Structure
 
