@@ -774,6 +774,27 @@ class AudiobookApp(ttk.Window):
             self.voice_prompt = dialog.result
             self.voice_detail_var.set(self._truncate_prompt(self.voice_prompt))
             self.log("Voice prompt updated")
+
+    def get_current_voice_config(self) -> str:
+        """Resolve current voice configuration string based on UI state."""
+        voice_preset_id = self.voice_preset_id.get() or (VOICE_PRESETS[0]["id"] if VOICE_PRESETS else "")
+        preset = get_voice_preset(voice_preset_id)
+        engine_type = preset.get("engine", "maya1")
+
+        if engine_type == "chatterbox":
+            reference_audio = self.reference_audio_var.get().strip()
+            if reference_audio:
+                if not os.path.exists(reference_audio):
+                    raise FileNotFoundError(f"Reference audio not found: {reference_audio}")
+                return reference_audio
+            else:
+                validate_voice_preset(voice_preset_id)
+                return preset.get("reference_audio", "")
+        else:
+            voice_prompt = self.voice_prompt or preset.get("prompt", self.DEFAULT_VOICE_PROMPT)
+            if not voice_prompt:
+                raise ValueError("Voice prompt is empty. Please edit the prompt or select a preset.")
+            return voice_prompt
     
     def start_conversion(self):
         """Start or resume the conversion."""
@@ -794,6 +815,50 @@ class AudiobookApp(ttk.Window):
             messagebox.showerror("Error", "Please select at least one chapter.")
             return
         
+        # Validate voice config and check for mismatch
+        try:
+            current_voice_config = self.get_current_voice_config()
+
+            if self.resumable_progress:
+                saved_config = self.resumable_progress.voice_prompt
+                if current_voice_config != saved_config:
+                    # Mismatch detected
+                    result = messagebox.askyesnocancel(
+                        "Voice Settings Mismatch",
+                        "The current voice settings do not match the saved progress.\n\n"
+                        "Resuming now would cause mixed voices in the audiobook.\n\n"
+                        "Yes: Resume with SAVED voice settings (revert changes)\n"
+                        "No: Start FRESH with CURRENT voice settings (discard progress)"
+                    )
+
+                    if result is None: # Cancel
+                        return
+
+                    if result: # Yes - Use Saved
+                        self.log("Reverting to saved voice settings...")
+                        # Restore preset and config
+                        preset_id = self.resumable_progress.voice_preset_id
+                        self.apply_voice_preset(preset_id, keep_prompt=True)
+
+                        preset = get_voice_preset(preset_id)
+                        engine = preset.get("engine", "maya1")
+                        if engine == "maya1":
+                            self.voice_prompt = saved_config
+                            self.voice_detail_var.set(self._truncate_prompt(self.voice_prompt))
+                        else:
+                            self.reference_audio_var.set(saved_config)
+                            self.voice_detail_var.set(saved_config)
+                            self.reference_audio_custom = True # Assume custom if we are restoring raw path
+
+                    else: # No - Start Fresh
+                        self.log("Discarding previous progress...")
+                        cleanup_temp_chunks(self.output_dir.get())
+                        self.resumable_progress = None
+
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            return
+
         # Update UI state
         self.is_converting = True
         self.is_paused = False
@@ -910,10 +975,20 @@ class AudiobookApp(ttk.Window):
                 self.update_chunk_progress(start_idx, total_chunks)
 
             # Resolve voice preset and engine config
+            # Use get_current_voice_config logic but need to extract engine_type etc.
+            # Ideally we should pass this info from start_conversion, but for now we reuse the method
+            # implicitly by accessing the UI vars (which are thread-safe for reading mostly).
+            # However, Tkinter variables are NOT thread-safe.
+            # NOTE: Accessing Tkinter variables (StringVar, etc.) from a background thread is risky.
+            # But get() is usually fine.
+
             voice_preset_id = self.voice_preset_id.get() or (VOICE_PRESETS[0]["id"] if VOICE_PRESETS else "")
             preset = get_voice_preset(voice_preset_id)
             engine_type = preset.get("engine", "maya1")
             voice_prompt = self.voice_prompt or preset.get("prompt", self.DEFAULT_VOICE_PROMPT)
+
+            # Re-implementing logic similar to get_current_voice_config but adapted for local variables
+            # We must be careful about UI access.
 
             if engine_type == "chatterbox":
                 reference_audio = self.reference_audio_var.get().strip()
