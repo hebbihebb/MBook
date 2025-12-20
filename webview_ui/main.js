@@ -64,8 +64,8 @@ function createWindow() {
   // Wait for Python server to be ready before loading UI
   waitForPythonServer(() => {
     console.log('Python server is ready');
-    // Load the local HTML file
-    mainWindow.loadFile(path.join(__dirname, "templates", "index.html"));
+    // Load the UI via the Flask server to ensure template rendering and CSRF token injection
+    mainWindow.loadURL('http://127.0.0.1:5000/');
   });
 
   mainWindow.on("closed", () => {

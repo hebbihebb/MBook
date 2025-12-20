@@ -12,6 +12,13 @@ const API = {
                     'Content-Type': 'application/json',
                 }
             };
+
+            // Add CSRF token header for non-GET requests
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            if (csrfToken && fetchOptions.method !== 'GET') {
+                fetchOptions.headers['X-CSRFToken'] = csrfToken;
+            }
+
             if (options.body) {
                 fetchOptions.body = JSON.stringify(options.body);
             }

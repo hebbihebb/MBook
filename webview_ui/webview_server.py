@@ -5,6 +5,7 @@ import uuid
 import time
 from werkzeug.utils import secure_filename
 from flask import Flask, jsonify, request, render_template, send_file, Response
+from flask_wtf.csrf import CSRFProtect
 from tkinter import filedialog
 import sys
 
@@ -19,6 +20,8 @@ from webview_ui.temp_config import UPLOAD_FOLDER, OUTPUT_ROOT, allowed_file, ALL
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['SECRET_KEY'] = os.urandom(24)  # Generate a random secret key for session/CSRF
+csrf = CSRFProtect(app)
 
 # Global state
 epub_parser = None
@@ -98,6 +101,13 @@ def select_epub():
 
     if not filepath:
         return jsonify({"error": "No file selected."}), 400
+
+    # Sanitize filepath: must exist and end with .epub
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 400
+
+    if not filepath.lower().endswith('.epub'):
+        return jsonify({"error": "Invalid file type. Must be an EPUB file."}), 400
 
     global epub_parser, cover_image_path
     try:
@@ -373,6 +383,11 @@ def events():
     return response
 
 if __name__ == "__main__":
-    # Bind to 0.0.0.0 to allow remote connections for testing
-    # WARNING: Only use this on trusted networks! For production, use a proper WSGI server with authentication
-    app.run(host='0.0.0.0', port=5000, threaded=True)  # Enable threading for concurrent requests
+    import argparse
+    parser = argparse.ArgumentParser(description="MBook Webview Server")
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=5000, help="Port to bind to")
+    args = parser.parse_args()
+
+    # Bind to the specified host (defaulting to 127.0.0.1 for security)
+    app.run(host=args.host, port=args.port, threaded=True)  # Enable threading for concurrent requests
