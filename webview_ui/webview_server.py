@@ -324,6 +324,11 @@ def events():
     return response
 
 if __name__ == "__main__":
-    # Bind to 0.0.0.0 to allow remote connections for testing
-    # WARNING: Only use this on trusted networks! For production, use a proper WSGI server with authentication
-    app.run(host='0.0.0.0', port=5000, threaded=True)  # Enable threading for concurrent requests
+    import argparse
+    parser = argparse.ArgumentParser(description="MBook Webview Server")
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=5000, help="Port to bind to")
+    args = parser.parse_args()
+
+    # Bind to the specified host (defaulting to 127.0.0.1 for security)
+    app.run(host=args.host, port=args.port, threaded=True)  # Enable threading for concurrent requests
