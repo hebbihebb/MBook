@@ -749,6 +749,11 @@ def convert_epub_to_audiobook(epub_path: str, output_dir: str = None, voice: str
     if len(audio_files) == 0:
         logger.error("[ERROR] No audio generated!")
         return None
+
+    if len(failed_chunks) > 0:
+        logger.error(f"[ERROR] Aborting: {len(failed_chunks)} chunks failed to generate.")
+        logger.error(f"Failed chunk indices: {failed_chunks}")
+        return None
     
     # Stitch audio
     logger.info("-" * 70)
