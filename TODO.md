@@ -1,25 +1,7 @@
 # MBook - TODO & Known Issues
 
-**Last Updated:** 2025-12-11
-**Status:** Post Code Review - Critical Issues Identified
-
----
-
-## Recent Changes (Dec 11, 2025)
-
-### ✅ Completed Fixes (Commits: a34eac3, 76c0dfc)
-
-**Phase 1: Security & Reliability**
-- Fixed 9 bare exception handlers (now use specific exception types)
-- Added security warnings for `trust_remote_code=True`
-- Implemented metadata sanitization to prevent command injection
-- Added input validation (EPUB size, output directory, voice prompt, batch size)
-- Added cleanup() methods for GPU resource management
-
-**Phase 2: Performance Optimizations**
-- Fixed O(n²) string concatenation in EPUB parsing → O(n)
-- Implemented singleton pattern for spacy model loading
-- Added graceful fallback for text chunking if spacy unavailable
+**Last Updated:** 2025-12-20
+**Status:** Under Investigation - Critical Issues Confirmed
 
 ---
 
@@ -28,71 +10,64 @@
 ### Data Corruption & Loss
 
 **CRITICAL #1: Silent Content Loss in Audiobooks**
-- **File:** [main.py:826-842](main.py#L826-L842)
-- **Problem:** If chunk generation fails, error is logged but conversion continues
-- **Impact:** Creates corrupted audiobooks with missing chunks (silence gaps)
-- **User discovers:** Hours later during playback
+- **File:** `main.py`
+- **Problem:** If chunk generation fails, the error is logged, but the conversion continues.
+- **Impact:** Creates corrupted audiobooks with missing chunks (silent gaps).
+- **User discovers:** Hours later during playback.
 - **Fix Required:**
-  - Add validation after stitching to verify all chunks present
-  - Abort conversion if any chunks are missing
-  - Display clear error to user
+  - Add validation after stitching to verify all chunks are present.
+  - Abort conversion if any chunks are missing.
+  - Display a clear error to the user.
 
-**CRITICAL #2: Resource Cleanup Safety Gaps**
-- **Files:** [convert_epub_to_audiobook.py:153-177](convert_epub_to_audiobook.py#L153-L177), [fast_maya_engine.py:168-203](fast_maya_engine.py#L168-L203)
-- **Problem:** Single try-except wrapping all cleanup - if one resource deletion fails, remaining resources abandoned
-- **Impact:** GPU memory leaks
-- **Fix Required:** Wrap each resource in individual try-except blocks
+**CRITICAL #2: Resume with Different Voice = Mixed Narration**
+- **File:** `main.py`
+- **Problem:** Resuming a conversion with a different voice prompt uses the old chunks (previous voice) and new chunks (current voice).
+- **Impact:** The resulting audiobook has multiple narrators mid-book.
+- **Fix Required:** Validate that the voice prompt matches on resume, or force the user to keep the same voice.
 
-**CRITICAL #3: Resume with Different Voice = Mixed Narration**
-- **File:** [main.py:563-566, 696-703](main.py#L563-L566)
-- **Problem:** Resume uses old chunks (previous voice) + new chunks (current voice)
-- **Impact:** Audiobook has multiple narrators mid-book
-- **Fix Required:** Validate voice prompt matches on resume, force user to keep same voice
+**CRITICAL #3: Resume with Different Chapter Selection = Corrupted Book**
+- **File:** `main.py`
+- **Problem:** The application does not validate if the selected chapters for a resumed conversion match the saved progress.
+- **Impact:** The audiobook has the wrong content (missing chapters, duplicates, wrong order).
+- **Fix Required:** Store and validate the chapter selection on resume.
 
-**CRITICAL #4: Resume with Different Chapter Selection = Corrupted Book**
-- **File:** [main.py:563-566, 675-687](main.py#L675-L687)
-- **Problem:** Resume doesn't validate if selected chapters match saved progress
-- **Impact:** Wrong content in audiobook (missing chapters, duplicates, wrong order)
-- **Fix Required:** Store and validate chapter selection on resume
-
-**CRITICAL #5: Cancel During Final Processing = Data Loss**
-- **File:** [main.py:848-865](main.py#L848-L865)
-- **Problem:** Cancel during stitching/M4B export loses all work (no checkpoints)
-- **Impact:** 12+ hours of work lost
-- **Fix Required:** Disable cancel during final processing, or save intermediate states
+**CRITICAL #4: Cancel During Final Processing = UI Lock**
+- **File:** `main.py`
+- **Problem:** The cancellation event is not checked during the final stitching and M4B export process.
+- **Impact:** The UI remains locked, and the user cannot cancel the process for a significant amount of time (potentially 12+ hours of work).
+- **Fix Required:** Disable the cancel button during the final processing stage or implement a mechanism to gracefully handle cancellation.
 
 ### Security Issues
 
-**CRITICAL #6: Prompt Injection via Quote Escape**
-- **File:** [convert_epub_to_audiobook.py:207](convert_epub_to_audiobook.py#L207)
-- **Problem:** Voice description not escaped - quotes can break XML/prompt structure
-- **Fix Required:** `description.replace('"', '&quot;')` or validate no special chars
+**CRITICAL #5: Prompt Injection via Quote Escape**
+- **File:** `convert_epub_to_audiobook.py`
+- **Problem:** The voice description is not escaped, allowing quotes to break the XML/prompt structure.
+- **Fix Required:** Escape the description (e.g., `description.replace('"', '&quot;')`) or validate that it contains no special characters.
 
-**CRITICAL #7: Arbitrary Code Execution via Model Loading**
-- **Files:** [convert_epub_to_audiobook.py:140-148](convert_epub_to_audiobook.py#L140-L148), [fast_maya_engine.py:149](fast_maya_engine.py#L149)
-- **Problem:** `trust_remote_code=True` allows arbitrary code execution from HuggingFace
-- **Current:** Runtime warnings (insufficient)
+**CRITICAL #6: Arbitrary Code Execution via Model Loading**
+- **Files:** `convert_epub_to_audiobook.py`, `fast_maya_engine.py`
+- **Problem:** The use of `trust_remote_code=True` allows for arbitrary code execution from HuggingFace when loading models.
 - **Fix Required:**
-  - Pin exact model versions with hash verification
-  - Download models locally and disable internet
-  - Consider sandboxing model loading
+  - Pin the exact model versions with hash verification.
+  - Download models locally and disable internet access during loading.
+  - Consider sandboxing the model loading process.
 
-**CRITICAL #8: Path Traversal in EPUB Extraction**
-- **File:** [epub_parser.py:77, 101-104](epub_parser.py#L77)
-- **Problem:** ZIP entries not validated - can contain "../../../etc/passwd"
-- **Impact:** File overwrite, information disclosure
-- **Fix Required:** Validate extracted paths are within safe directory
+**CRITICAL #7: Path Traversal in EPUB Extraction (Needs Investigation)**
+- **File:** `epub_parser.py`
+- **Problem:** ZIP entries may not be validated, potentially allowing for path traversal attacks (e.g., `../../../etc/passwd`).
+- **Impact:** File overwrite and information disclosure.
+- **Fix Required:** Validate that the extracted paths are within a safe directory. Further investigation is needed to confirm the vulnerability in the `ebooklib` library.
 
-**CRITICAL #9: ZIP Bomb / Decompression Bomb**
-- **File:** [main.py:382-384](main.py#L382-L384)
-- **Problem:** Only checks compressed size - 10MB EPUB can decompress to 50GB
-- **Impact:** Memory exhaustion, system crash
-- **Fix Required:** Monitor decompressed size, add limits
+**CRITICAL #8: ZIP Bomb / Decompression Bomb**
+- **File:** `main.py`
+- **Problem:** The application only checks the compressed size of the EPUB file, not the decompressed size.
+- **Impact:** A decompression bomb could lead to memory exhaustion and a system crash.
+- **Fix Required:** Monitor the decompressed size during extraction and enforce a limit.
 
-**CRITICAL #10: Metadata Sanitization Logic Bug**
-- **File:** [assembler.py:8-39](assembler.py#L8-L39)
-- **Problem:** Redundant operations (O(n*m)), Unicode bypass (U+2028 line separator not filtered)
-- **Fix Required:** Single regex to remove all dangerous chars including Unicode
+**CRITICAL #9: Metadata Sanitization Logic Bug**
+- **File:** `assembler.py`
+- **Problem:** The sanitization logic has been partially fixed (using a single regex), but it still allows for a Unicode bypass (e.g., U+2028 line separator is not filtered).
+- **Fix Required:** Improve the regex to remove all dangerous characters, including Unicode line separators and other control characters.
 
 ---
 
