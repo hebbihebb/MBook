@@ -1103,6 +1103,22 @@ class AudiobookApp(ttk.Window):
             # Stitch audio
             self.update_status("Stitching audio...")
             self.update_progress(86)
+
+            # Validate all chunks are present
+            if len(progress.chunk_files) != total_chunks:
+                missing_chunks = sorted([i for i in range(total_chunks) if i not in progress.chunk_files])
+
+                # Format a readable error message
+                missing_str = ", ".join(map(str, missing_chunks[:10]))
+                if len(missing_chunks) > 10:
+                    missing_str += f", ... (+{len(missing_chunks)-10} more)"
+
+                error_msg = f"Conversion failed: {len(missing_chunks)} chunks failed to generate.\nMissing chunks: {missing_str}"
+                self.log(error_msg)
+
+                # Do NOT proceed to stitching. This prevents silent content loss.
+                self.finish_conversion(False, error_msg)
+                return
             
             audio_files = [progress.chunk_files[i] for i in sorted(progress.chunk_files.keys())]
             chunk_mapping = [chunk_to_chapter[i] for i in sorted(progress.chunk_files.keys())]
